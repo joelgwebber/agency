@@ -6,7 +6,7 @@ import chromadb
 import chromadb.api
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
-from agency.tools import Decl, Prop, Tool, Type
+from agency.tools import Func, Schema, Tool, Type
 
 
 class Recipes(Tool):
@@ -39,17 +39,17 @@ class Recipes(Tool):
         for dir in dirs:
             self._update(dir)
 
-        self._add_decl(
-            Decl(
+        self._add_func(
+            Func(
                 self.find_recipes,
                 "find_recipes",
                 "Finds recipes that explain how to approach various tasks. ALWAYS call this first for a new question.",
                 {
-                    "goal": Prop(
+                    "goal": Schema(
                         Type.String,
                         "A brief description of the goal",
                     ),
-                    "number": Prop(
+                    "number": Schema(
                         # TODO: Does Gemini support min/max constraints in the schema?
                         Type.Integer,
                         "Number of recipes to find, in the range 3-10",
@@ -94,7 +94,6 @@ class Recipes(Tool):
     def _embed(self, recipe: str) -> List[float]:
         # SEMANTIC_SIMILARITY seems to cluster too tightly, leading to repeated entries.
         inputs: List = [TextEmbeddingInput(recipe, "CLASSIFICATION")]
-
         embeddings = self._embed_model.get_embeddings(inputs)
         return embeddings[0].values
 

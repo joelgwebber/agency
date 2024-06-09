@@ -5,7 +5,7 @@ from urllib.parse import urljoin
 from playwright.sync_api import Response, sync_playwright
 from unstructured.partition.auto import partition
 
-from agency.tools import Decl, Prop, Tool, Type
+from agency.tools import Func, Schema, Tool, Type
 
 
 class Browse(Tool):
@@ -13,13 +13,13 @@ class Browse(Tool):
     def __init__(self):
         Tool.__init__(self)
 
-        self._add_decl(
-            Decl(
+        self._add_func(
+            Func(
                 self.browse_url,
                 "browse_url",
                 "Returns the contents at the specified URL.",
                 {
-                    "url": Prop(
+                    "url": Schema(
                         Type.String,
                         "The url to fetch",
                     ),

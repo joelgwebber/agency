@@ -1,11 +1,21 @@
+from __future__ import annotations
+
+from dataclasses import field
 from typing import Dict, List, Optional
 
 import requests
 
-from agency.tools import Decl, Prop, Tool, Type
+from agency.tools import Tool
+from agency.tools.annotations import lmfunc, lmschema
 
 # Just use Tavily for now.
 _TAVILY_API_URL = "https://api.tavily.com"
+
+
+@lmschema("Search query parameters")
+class SearchArgs:
+    query: str = field(metadata={"desc": "The url to fetch"})
+    max_results: int = field(default=5, metadata={"desc": "Maximum number of results"})
 
 
 class Search(Tool):
@@ -14,23 +24,11 @@ class Search(Tool):
     def __init__(self, api_key: str):
         Tool.__init__(self)
         self._api_key = api_key
+        self._add_func2(self.search_query)
 
-        self._add_decl(
-            Decl(
-                self.search_query,
-                "search_query",
-                "Performs an web search.",
-                {
-                    "query": Prop(Type.String, "The url to fetch"),
-                    "max_results": Prop(
-                        Type.String, "The maximum number of results to fetch"
-                    ),
-                },
-            )
-        )
-
-    def search_query(self, query: str, max_results: int) -> list[Dict]:
-        raw_json = self._raw_results(query, max_results)
+    @lmfunc("search_query", "Performs a web search.")
+    def search_query(self, args: SearchArgs) -> list[Dict]:
+        raw_json = self._raw_results(args.query, args.max_results)
         return self._clean_results(raw_json["results"])
 
     def _raw_results(

@@ -4,7 +4,7 @@ import chromadb
 import chromadb.api
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
-from agency.tools import Decl, Prop, Tool, Type
+from agency.tools import Func, Schema, Tool, Type
 
 
 class Notebook(Tool):
@@ -21,23 +21,23 @@ class Notebook(Tool):
             name="notebook", get_or_create=True
         )
 
-        self._add_decl(
-            Decl(
+        self._add_func(
+            Func(
                 self.record_note,
                 "record_note",
                 "Records a note in the notebook for later research.",
-                {"text": Prop(Type.String, "The document text")},
+                {"text": Schema(Type.String, "The document text")},
             ),
         )
 
-        self._add_decl(
-            Decl(
+        self._add_func(
+            Func(
                 self.lookup_notes,
                 "lookup_notes",
                 "Looks up notes in the notebook.",
                 {
-                    "reference": Prop(Type.String, "Reference text"),
-                    "max_results": Prop(
+                    "reference": Schema(Type.String, "Reference text"),
+                    "max_results": Schema(
                         Type.Integer, "Maximum number of documents to return"
                     ),
                 },
