@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import traceback
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
@@ -11,10 +10,18 @@ from vertexai.generative_models import Tool as LangTool
 
 from agency.utils import timestamp
 
-FUNC_KEY = "_func"
+DECL_KEY = "_decl"
 SCHEMA_KEY = "_schema"
 
 
+# TODO:Add more types and translate to OpenAPI's type + format.
+# - date
+# - time
+# - duration
+# - email
+# - uuid
+# - uri
+# - int32/64, float32/64 (Gemini-specific)
 class Type(Enum):
     """Types specified by json-schema. More optional detail can be specified in 'format'."""
 
@@ -27,24 +34,9 @@ class Type(Enum):
     DateTime = "string"
 
 
-class Format(Enum):
-    """Not all of these are supported by all implementations, but specifying them shouldn't
-    interfere with anything."""
-
-    Default = ""
-
-    DateTime = "date-time"  # standard
-    Date = "date"
-    Time = "time"
-    Duration = "duration"
-    Email = "email"
-    Uuid = "uuid"
-    Uri = "uri"
-
-    Integer32 = "int32"  # Gemini
-    Integer64 = "int64"
-    Float32 = "float"
-    Float64 = "double"
+# OpenAPI "format" values for various types.
+# Types absent from this map require no format specifier.
+_openapi_format: Dict[Type, str] = {Type.DateTime: "date-time"}
 
 
 @dataclass
@@ -54,71 +46,79 @@ class Schema:
 
     typ: Type
     desc: Optional[str] = None
-    format: Format = Format.Default
     default: Any = None
-    enum: Optional[List[Any]] = None
-    properties: Optional[Dict[str, Schema]] = None
-    items: Optional[Schema] = None
 
-    def as_dict(self) -> Dict[str, Any]:
+    # Enumeration options.
+    enum: Optional[List[Any]] = None
+
+    # Schema for array items.
+    item_schema: Optional[Schema] = None
+
+    # Schemae for object properties.
+    prop_schemae: Optional[Dict[str, Schema]] = None
+
+    # Object dataclass to instantiate.
+    cls: Optional[type] = None
+
+    # TODO: This is very Gemini-specific at the moment.
+    # Should be easy to generalize to other function-calling model APIs.
+    def to_openapi(self) -> Dict[str, Any]:
         """Produces a dictionary in the structure expected by the Gemini / OpenAPI schema."""
+
+        # TODO: Better validation of valid states (e.g., enums with primitives, etc).
 
         d: Dict[str, Any] = {
             "type": self.typ.value,
             "description": self.desc,
         }
 
+        if self.typ in _openapi_format:
+            d["format"] = _openapi_format[self.typ]
+
         if self.enum is not None:
             d["enum"] = self.enum
 
         if self.typ == Type.Object:
-            if self.properties is None:
-                raise Exception("Object type requires 'properties'")
+            if self.prop_schemae is None:
+                raise Exception("Object type requires prop_schemae")
 
             d["properties"] = {}
             d["required"] = []
-            for name, p in self.properties.items():
-                d["properties"][name] = p.as_dict()
+            for name, p in self.prop_schemae.items():
+                d["properties"][name] = p.to_openapi()
                 if p.default is None:
                     d["required"].append(name)
 
         if self.typ == Type.Array:
-            if self.items is None:
+            if self.item_schema is None:
                 raise Exception("Array type requires 'items'")
-
-            d["items"] = self.items.as_dict()
+            d["items"] = self.item_schema.to_openapi()
 
         return d
 
 
-def func_for(func: Callable) -> Func:
+@dataclass
+class Decl:
     """TODO: doc"""
 
-    if not hasattr(func, FUNC_KEY):
-        raise Exception(f"{func} requires the @lmfunc annotation")
-    return getattr(func, FUNC_KEY)
-
-
-@dataclass
-class Func:
     fn: Callable
     name: str
     desc: str
     args: Schema
 
-    def __init__(self, fn: Callable, name: str, desc: str, props: Any):
+    def __init__(self, fn: Callable, name: str, desc: str, args: Any):
         self.fn = fn
         self.name = name
         self.desc = desc
-        if isinstance(props, Schema):
-            self.args = props
+        if isinstance(args, Schema):
+            self.args = args
         else:
-            self.args = Schema(Type.Object, "", Format.Default, properties=props)
+            self.args = Schema(Type.Object, "", prop_schemae=args)
 
 
 class Tool:
+    _decls: Dict[str, Decl]
     _funcs: List[FunctionDeclaration]
-    _decls: Dict[str, Func]
 
     def __init__(self):
         self._funcs = []
@@ -128,10 +128,10 @@ class Tool:
     def funcs(self) -> List[FunctionDeclaration]:
         return self._funcs
 
-    def _add_func2(self, func: Callable) -> None:
-        self._add_func(func_for(func))
+    def declare(self, func: Callable) -> None:
+        """TODO: doc"""
 
-    def _add_func(self, decl: Func) -> None:
+        decl = _decl_for(func)
         if decl.name in self._decls:
             raise Exception(f"duplicate declaration {decl.name}")
 
@@ -140,30 +140,18 @@ class Tool:
             FunctionDeclaration(
                 name=decl.name,
                 description=decl.desc,
-                parameters=decl.args.as_dict(),
+                parameters=decl.args.to_openapi(),
             )
         )
 
     def dispatch(self, fn: FunctionCall) -> Part:
-        args = {}
         decl = self._decls[fn.name]
-
-        if decl.args.properties is None:
+        if decl.args.prop_schemae is None:
             raise Exception("Bad declaration. This shouldn't happen.")
 
-        # Parse args.
-        for name, p in decl.args.properties.items():
-            # Fill in default values.
-            if p.default is not None:
-                args[name] = p.default
-
-            if name in fn.args:
-                val = fn.args[name]
-                args[name] = _parse_val(val, p)
-
-        args = {"args": args}
-        print(">>>>", args)
-        result = decl.fn(self, **args)
+        # Parse args and call the target function.
+        args = _parse_val(fn.args, decl.args)
+        result = decl.fn(self, args)
 
         # TODO: Why the hell does this blow up now?
         # return Part.from_function_response(
@@ -186,6 +174,8 @@ class Tool:
 
 
 class ToolBox:
+    """TODO: doc"""
+
     _funcs: List[FunctionDeclaration]
     _tools: Dict[str, Tool]
 
@@ -220,40 +210,58 @@ class ToolBox:
             )
 
         try:
-            print(">>>", fn)
             return tool.dispatch(fn)
         except Exception as e:
             # Catch exceptions, log them, and send them to the model in hopes it will sort itself.
             msg = f"exception calling {fn.name}: {e}"
-            print(msg, "\n".join(traceback.format_exception(e)))
             return Part.from_function_response(fn.name, {"error": msg})
 
 
-def _parse_val(val: Any, p: Optional[Schema]) -> Any:
-    # print(">>>", val, p)
-    if p is None:
+def _decl_for(func: Callable) -> Decl:
+    if not hasattr(func, DECL_KEY):
+        raise Exception(f"{func} requires the @lmfunc annotation")
+    return getattr(func, DECL_KEY)
+
+
+# `schema` is only optional to avoid making every call-site messy.
+def _parse_val(val: Any, schema: Optional[Schema]) -> Any:
+    if schema is None:
         raise Exception(f"Need a value type to parse {val}")
 
-    match p.typ:
+    match schema.typ:
+        # Simple types.
         case Type.String:
             return val
         case Type.Real:
             return float(val)
         case Type.Integer:
-            # Sometimes we get a float for an int.
-            try:
-                return int(val)
-            except:
-                return int(float(val))
+            return _loose_int(val)
         case Type.Boolean:
             return bool(val)
         case Type.DateTime:
             return timestamp.fromisoformat(val)
 
+        # Arrays.
         case Type.Array:
-            return [_parse_val(item, p.items) for item in val]
+            return [_parse_val(item, schema.item_schema) for item in val]
 
+        # Objects.
         case Type.Object:
-            if p.properties is None:
-                raise Exception(f"Need property types to parse object {val} : {p}")
-            return {k: _parse_val(v, p.properties[k]) for (k, v) in val.items()}
+            if schema.prop_schemae is None or schema.cls is None:
+                raise Exception(
+                    f"Need property schemae to parse object {val} : {schema}"
+                )
+
+            # Parse ctor args and instantiate the dataclass.
+            ctor_args = {
+                k: _parse_val(v, schema.prop_schemae[k]) for (k, v) in val.items()
+            }
+            return schema.cls(**ctor_args)
+
+
+def _loose_int(val: Any) -> int:
+    # Sometimes we get a float for an int.
+    try:
+        return int(val)
+    except:
+        return int(float(val))

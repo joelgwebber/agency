@@ -1,4 +1,5 @@
 import os
+from dataclasses import field
 from glob import glob
 from typing import List
 
@@ -6,7 +7,14 @@ import chromadb
 import chromadb.api
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
-from agency.tools import Func, Schema, Tool, Type
+from agency.tools import Tool
+from agency.tools.annotations import decl, prop, schema
+
+
+@schema()
+class FindRecipesArgs:
+    goal: str = prop("A brief description of the goal")
+    number: int = prop("Number of recipes to find, in the range 3-10", default=5)
 
 
 class Recipes(Tool):
@@ -39,29 +47,18 @@ class Recipes(Tool):
         for dir in dirs:
             self._update(dir)
 
-        self._add_func(
-            Func(
-                self.find_recipes,
-                "find_recipes",
-                "Finds recipes that explain how to approach various tasks. ALWAYS call this first for a new question.",
-                {
-                    "goal": Schema(
-                        Type.String,
-                        "A brief description of the goal",
-                    ),
-                    "number": Schema(
-                        # TODO: Does Gemini support min/max constraints in the schema?
-                        Type.Integer,
-                        "Number of recipes to find, in the range 3-10",
-                    ),
-                },
-            )
-        )
+        self.declare(self.find_recipes)
 
     # TODO: Make 'number' an int. Gotta figure out how to cast the proto args in dispatch() properly.
-    def find_recipes(self, goal: str, number: float = 5) -> List[str]:
-        vec = self._embed(goal)
-        rsp = self._recipes_coll.query(query_embeddings=[vec], n_results=int(number))
+    @decl(
+        "find_recipes",
+        "Finds recipes that explain how to approach various tasks. ALWAYS call this first for a new question.",
+    )
+    def find_recipes(self, args: FindRecipesArgs) -> List[str]:
+        vec = self._embed(args.goal)
+        rsp = self._recipes_coll.query(
+            query_embeddings=[vec], n_results=int(args.number)
+        )
         if rsp["documents"] is not None:
             return dedupe(rsp["documents"][0])
         return []

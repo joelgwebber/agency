@@ -1,3 +1,3 @@
-from .tools import Func, Schema, Tool, ToolBox, Type
+from .tools import Decl, Schema, Tool, ToolBox, Type
 
-__all__ = ["ToolBox", "Tool", "Func", "Schema", "Type"]
+__all__ = ["ToolBox", "Tool", "Decl", "Schema", "Type"]

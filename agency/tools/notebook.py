@@ -4,7 +4,19 @@ import chromadb
 import chromadb.api
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
-from agency.tools import Func, Schema, Tool, Type
+from agency.tools import Tool
+from agency.tools.annotations import decl, prop, schema
+
+
+@schema()
+class RecordNoteArgs:
+    text: str = prop("The document text")
+
+
+@schema()
+class LookupNotesArgs:
+    reference: str = prop("Reference text")
+    max_results: int = prop("Maximum number of documents to return", default=5)
 
 
 class Notebook(Tool):
@@ -21,40 +33,22 @@ class Notebook(Tool):
             name="notebook", get_or_create=True
         )
 
-        self._add_func(
-            Func(
-                self.record_note,
-                "record_note",
-                "Records a note in the notebook for later research.",
-                {"text": Schema(Type.String, "The document text")},
-            ),
-        )
+        self.declare(self.record_note)
+        self.declare(self.lookup_notes)
 
-        self._add_func(
-            Func(
-                self.lookup_notes,
-                "lookup_notes",
-                "Looks up notes in the notebook.",
-                {
-                    "reference": Schema(Type.String, "Reference text"),
-                    "max_results": Schema(
-                        Type.Integer, "Maximum number of documents to return"
-                    ),
-                },
-            ),
-        )
-
-    def record_note(self, text: str):
+    @decl("record_note", "Records a note in the notebook for later research.")
+    def record_note(self, args: RecordNoteArgs):
         # TODO: Use a stronger hash.
-        doc_hash = f"{hash(text):016x}"
+        doc_hash = f"{hash(args.text):016x}"
         self._notebook_coll.add(
-            ids=doc_hash, embeddings=self._embed(text), documents=text
+            ids=doc_hash, embeddings=self._embed(args.text), documents=args.text
         )
 
-    def lookup_notes(self, reference: str, max_results: int):
-        vec = self._embed(reference)
+    @decl("lookup_note", "Looks up notes in the notebook.")
+    def lookup_notes(self, args: LookupNotesArgs):
+        vec = self._embed(args.reference)
         rsp = self._notebook_coll.query(
-            query_embeddings=[vec], n_results=int(max_results)
+            query_embeddings=[vec], n_results=int(args.max_results)
         )
         if rsp["documents"] is not None:
             return rsp["documents"][0]

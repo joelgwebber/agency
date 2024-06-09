@@ -5,37 +5,34 @@ from urllib.parse import urljoin
 from playwright.sync_api import Response, sync_playwright
 from unstructured.partition.auto import partition
 
-from agency.tools import Func, Schema, Tool, Type
+from agency.tools import Tool
+from agency.tools.annotations import decl, prop, schema
+
+
+@schema()
+class BrowseArgs:
+    url: str = prop("The url to fetch")
 
 
 class Browse(Tool):
 
     def __init__(self):
         Tool.__init__(self)
+        self.declare(self.browse_url)
 
-        self._add_func(
-            Func(
-                self.browse_url,
-                "browse_url",
-                "Returns the contents at the specified URL.",
-                {
-                    "url": Schema(
-                        Type.String,
-                        "The url to fetch",
-                    ),
-                },
-            )
-        )
-
-    def browse_url(self, url: str) -> str:
+    @decl("browse_url", "Returns the contents at the specified URL.")
+    def browse_url(self, args: BrowseArgs) -> str:
         with sync_playwright() as p:
             try:
                 # Fetch the content using a real browser via playwright, as bytes.
                 browser = p.chromium.launch(headless=False)
                 context = browser.new_context()
-                # Malenia.apply_stealth(context) # Necessary for some pages to load?
+
+                # TODO: Necessary for some pages to load?
+                # Malenia.apply_stealth(context)
+
                 page = context.new_page()
-                rsp = page.goto(url)
+                rsp = page.goto(args.url)
                 content_type = _content_type(rsp)
                 file = io.BytesIO(bytes(page.content(), "UTF-8"))
                 browser.close()
@@ -53,7 +50,7 @@ class Browse(Tool):
                 if meta.link_texts is not None and meta.link_urls is not None:
                     for idx, text in enumerate(meta.link_texts or []):
                         # TODO: Deal with <base> tag?
-                        resolved_url = urljoin(url, meta.link_urls[idx])
+                        resolved_url = urljoin(args.url, meta.link_urls[idx])
                         text = text or ""
                         texts.append(f"[{text.strip()}]({resolved_url})")
 

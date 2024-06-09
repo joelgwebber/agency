@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import requests
 
 from agency.tools import Tool
-from agency.tools.annotations import lmfunc, lmschema
+from agency.tools.annotations import decl, prop, schema
 
 # Just use Tavily for now.
 _TAVILY_API_URL = "https://api.tavily.com"
 
 
-@lmschema("Search query parameters")
+@schema()
 class SearchArgs:
-    query: str = field(metadata={"desc": "The url to fetch"})
-    max_results: int = field(default=5, metadata={"desc": "Maximum number of results"})
+    query: str = prop("The url to fetch")
+    max_results: int = prop("Maximum number of results", default=5)
 
 
 class Search(Tool):
@@ -24,12 +23,12 @@ class Search(Tool):
     def __init__(self, api_key: str):
         Tool.__init__(self)
         self._api_key = api_key
-        self._add_func2(self.search_query)
+        self.declare(self.search_query)
 
-    @lmfunc("search_query", "Performs a web search.")
-    def search_query(self, args: SearchArgs) -> list[Dict]:
+    @decl("search_query", "Performs a web search.")
+    def search_query(self, args: SearchArgs) -> Union[Dict, List[Dict]]:
         raw_json = self._raw_results(args.query, args.max_results)
-        return self._clean_results(raw_json["results"])
+        return self._clean_results(raw_json)
 
     def _raw_results(
         self,
@@ -53,22 +52,31 @@ class Search(Tool):
             "include_raw_content": include_raw_content,
             "include_images": include_images,
         }
-        response = requests.post(
+        rsp = requests.post(
             # type: ignore
             f"{_TAVILY_API_URL}/search",
             json=params,
         )
-        response.raise_for_status()
-        return response.json()
+        # Return the repsonse json directly, even if it's an error.
+        # TODO: We may want to settle on a standard format for errors, so we can control behavior better.
+        return rsp.json()
 
-    def _clean_results(self, results: List[Dict]) -> List[Dict]:
+    def _clean_results(self, results: Dict) -> Union[Dict, List[Dict]]:
         """Clean results from Tavily Search API."""
-        clean_results = []
-        for result in results:
-            clean_results.append(
-                {
-                    "url": result["url"],
-                    "content": result["content"],
-                }
-            )
-        return clean_results
+        if "results" in results:
+            clean_results = []
+            for result in results["results"]:
+                clean_results.append(
+                    {
+                        "url": result["url"],
+                        "content": result["content"],
+                    }
+                )
+            return clean_results
+
+        # Error details.
+        elif "details" in results:
+            return results["details"]
+
+        # Unknown output.
+        return results
