@@ -1,10 +1,40 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import List
 
 import pytz
+from google.cloud.aiplatform_v1beta1 import FunctionCall, FunctionResponse
 from IPython.display import Markdown, display
+from proto.marshal.collections.maps import MapComposite
+from proto.marshal.collections.repeated import RepeatedComposite
 from vertexai.generative_models import Part
+from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
+
+
+def embed(recipe: str) -> List[float]:
+    # This is the most recent embedding model I'm aware of.
+    # It has a 2k input limit, so we might have to break some things up.
+    model = TextEmbeddingModel.from_pretrained("text-embedding-004")
+
+    # SEMANTIC_SIMILARITY seems to cluster too tightly, leading to repeated entries.
+    inputs: List = [TextEmbeddingInput(recipe, "CLASSIFICATION")]
+
+    embeddings = model.get_embeddings(inputs)
+    return embeddings[0].values
+
+
+def print_proto(m) -> str:
+    match m:
+        case MapComposite():
+            return ", ".join([f"{k} = {print_proto(m[k])}" for k in m])
+        case RepeatedComposite():
+            return ", ".join([print_proto(v) for v in m])
+    return str(m)
+
+
+def print_tool(call: FunctionCall, rsp: FunctionResponse) -> str:
+    return f"""{print_proto(call.args)}\n{print_proto(rsp.response)}"""
 
 
 # TODO: Is there really no better way to do this?!

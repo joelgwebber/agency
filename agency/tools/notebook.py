@@ -19,6 +19,8 @@ class LookupNotesArgs:
     max_results: int = prop("Maximum number of documents to return", default=5)
 
 
+# A tool for recording ephemeral notes for later consultation.
+# The notes are stored in a vector database with computed embeddings for later retrieval.
 class Notebook(Tool):
     _embed_model: TextEmbeddingModel
     _notebook_coll: chromadb.Collection

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import Field, dataclass, field, fields, is_dataclass
 from enum import Enum
 from inspect import isclass
-from typing import Any, Dict, List, Optional, TypeVar, get_type_hints
+from typing import Any, Dict, List, Optional, get_type_hints
 
 from agency.tools.tools import DECL_KEY, SCHEMA_KEY, Decl, Schema, Type
 from agency.utils import timestamp
@@ -15,7 +15,9 @@ ARGS_NAME = "args"
 # Returning the correct Field[T] breaks callers.
 def prop(desc: str, *, default: Any = None) -> Any:
     """TODO: doc"""
-    return field(default=default, metadata={"desc": desc})
+    if default is not None:
+        return field(default=default, metadata={"desc": desc})
+    return field(metadata={"desc": desc})
 
 
 def decl(func_name: str, func_desc: str):
@@ -95,7 +97,7 @@ def _ensure_schema(cls: type, desc: str, default: Optional[Any] = None) -> Schem
     elif _is_list(cls):
         # TODO:: better errors. Should items get a separate description?
         item_type = cls.__args__[0]  # pyright: ignore
-        return Schema(Type.Array, desc, items=_ensure_schema(item_type, ""))
+        return Schema(Type.Array, desc, item_schema=_ensure_schema(item_type, ""))
 
     # Object types:
     elif is_dataclass(cls):
@@ -109,7 +111,7 @@ def _ensure_schema(cls: type, desc: str, default: Optional[Any] = None) -> Schem
             )
 
         # Use cls_desc, ignoring the field's description.
-        schema = Schema(Type.Object, desc, properties=props, cls=cls)
+        schema = Schema(Type.Object, desc, prop_schemae=props, cls=cls)
         setattr(cls, SCHEMA_KEY, schema)
         return schema
 

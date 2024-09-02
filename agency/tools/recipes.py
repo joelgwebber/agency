@@ -1,6 +1,6 @@
 import os
-from dataclasses import field
 from glob import glob
+from hashlib import md5
 from typing import List
 
 import chromadb
@@ -14,7 +14,7 @@ from agency.tools.annotations import decl, prop, schema
 @schema()
 class FindRecipesArgs:
     goal: str = prop("A brief description of the goal")
-    number: int = prop("Number of recipes to find, in the range 3-10", default=5)
+    number: int = prop("Number of recipes to find, minimum 3", default=10)
 
 
 class Recipes(Tool):
@@ -67,12 +67,12 @@ class Recipes(Tool):
         # TODO: Group embed calls for efficiency.
         pattern = os.path.join(dir, f"*.md")
         for file_path in glob(pattern):
+            print(f"--- recipe: {file_path}")
             with open(file_path, "r") as file:
                 self._ensure(file.read())
 
     def _ensure(self, recipe: str):
-        # TODO: Use a stronger hash.
-        recipe_hash = f"{hash(recipe):016x}"
+        recipe_hash = md5(recipe.encode(), usedforsecurity=False).hexdigest()
 
         # Already extant?
         result = self._recipes_coll.get(ids=recipe_hash)
@@ -81,6 +81,7 @@ class Recipes(Tool):
                 return
 
         # Nope. Embed and add it.
+        print(f"    [re-]embedding {recipe_hash}")
         embedding = self._embed(recipe)
         self._recipes_coll.add(
             ids=recipe_hash,

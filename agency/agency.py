@@ -5,17 +5,14 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Generator, List, Literal, Optional, cast
 
-from google.cloud.aiplatform_v1beta1 import FunctionCall, FunctionResponse
-from proto.marshal.collections.maps import MapComposite
-from proto.marshal.collections.repeated import RepeatedComposite
 from vertexai.generative_models import ChatSession, Content, GenerativeModel, Part
 
 from agency.tools import Tool, ToolBox
-from agency.utils import part_is_text
+from agency.utils import part_is_text, print_tool
 
 # Give today's date, because it often gets that wrong.
 # Explicitly request that it use recipes to fuel CoT reasoning.
-_sys_suffix = f"""
+required_instructions = f"""
 Today's date is {date.today()}.
 
 When asked a question, ALWAYS do the following:
@@ -25,8 +22,6 @@ When asked a question, ALWAYS do the following:
 - Use any appropriate ideas and constraints from recipes to inform function calls.
 - Complete the request using the available functions.
 - Use your existing context as much as possible to avoid duplicate work.
-- Use the notebook to record notes as you go, looking them up by subject when needed.
-- DO NOT use any other information to answer questions.
 """
 
 
@@ -119,17 +114,10 @@ class Agency:
 
     def __init__(
         self,
+        model: GenerativeModel,
         tools: List[Tool],
-        sys_instr: str,
         history: Optional[List[Content]] = None,
     ):
-        model = GenerativeModel(
-            # "gemini-1.5-pro-preview-0514" has VERY low quota (3/m)
-            # "gemini-1.0-pro-001" 32k context length often breaks session summaries
-            "gemini-1.5-flash-preview-0514",
-            system_instruction=[Part.from_text(sys_instr), Part.from_text(_sys_suffix)],
-        )
-
         if history == None:
             history = init_shots
 
@@ -152,9 +140,9 @@ class Agency:
             for thought in self.think():
                 match thought.typ:
                     case "message":
-                        print(thought.content)
+                        print(">", thought.content)
                     case "tool":
-                        print(thought.tool, thought.content)
+                        print(">", thought.tool)  # , thought.content)
 
     def new_question(self, question: str):
         self._inputs.append(Part.from_text(question))
@@ -175,7 +163,7 @@ class Agency:
                 rsp_part = self._toolbox.dispatch(call)
                 rsp = rsp_part.function_response
                 new_inputs.append(rsp_part)
-                yield Thought("tool", call.name, _print_tool(call, rsp))
+                yield Thought("tool", call.name, print_tool(call, rsp))
 
         self._inputs = new_inputs
 
@@ -191,16 +179,3 @@ class Agency:
 
         cand = rsp.candidates[0]
         return cand.content.parts
-
-
-def _print_proto(m) -> str:
-    match m:
-        case MapComposite():
-            return ", ".join([f"{k} = {_print_proto(m[k])}" for k in m])
-        case RepeatedComposite():
-            return ", ".join([_print_proto(v) for v in m])
-    return str(m)
-
-
-def _print_tool(call: FunctionCall, rsp: FunctionResponse) -> str:
-    return f"""{_print_proto(call.args)}\n{_print_proto(rsp.response)}"""

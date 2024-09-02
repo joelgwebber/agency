@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import traceback
+import inspect
 from typing import Any, Callable, Dict, List, Optional
 
 from google.cloud.aiplatform_v1beta1 import FunctionCall
@@ -23,7 +25,8 @@ SCHEMA_KEY = "_schema"
 # - uri
 # - int32/64, float32/64 (Gemini-specific)
 class Type(Enum):
-    """Types specified by json-schema. More optional detail can be specified in 'format'."""
+    """Types specified by OpenAPI formats.
+    These are used for "format"; _openapi_type defined type "type" field."""
 
     String = "string"
     Real = "integer"
@@ -31,12 +34,20 @@ class Type(Enum):
     Boolean = "boolean"
     Array = "array"
     Object = "object"
-    DateTime = "string"
+    DateTime = "date-time"
 
 
 # OpenAPI "format" values for various types.
 # Types absent from this map require no format specifier.
-_openapi_format: Dict[Type, str] = {Type.DateTime: "date-time"}
+_openapi_type: Dict[Type, str] = {
+    Type.String: "string",
+    Type.Real: "integer",
+    Type.Integer: "number",
+    Type.Boolean: "boolean",
+    Type.Array: "array",
+    Type.Object: "object",
+    Type.DateTime: "string",
+}
 
 
 @dataclass
@@ -68,12 +79,10 @@ class Schema:
         # TODO: Better validation of valid states (e.g., enums with primitives, etc).
 
         d: Dict[str, Any] = {
-            "type": self.typ.value,
+            "type": _openapi_type[self.typ],
+            "format": self.typ.value,
             "description": self.desc,
         }
-
-        if self.typ in _openapi_format:
-            d["format"] = _openapi_format[self.typ]
 
         if self.enum is not None:
             d["enum"] = self.enum
@@ -126,6 +135,7 @@ class Tool:
 
     @property
     def funcs(self) -> List[FunctionDeclaration]:
+        """TODO: doc"""
         return self._funcs
 
     def declare(self, func: Callable) -> None:
@@ -213,7 +223,9 @@ class ToolBox:
             return tool.dispatch(fn)
         except Exception as e:
             # Catch exceptions, log them, and send them to the model in hopes it will sort itself.
-            msg = f"exception calling {fn.name}: {e}"
+            msg = f"""exception calling {fn.name}: {e}
+                     {"\n".join(traceback.format_exception(e))}"""
+
             return Part.from_function_response(fn.name, {"error": msg})
 
 
@@ -256,6 +268,9 @@ def _parse_val(val: Any, schema: Optional[Schema]) -> Any:
             ctor_args = {
                 k: _parse_val(v, schema.prop_schemae[k]) for (k, v) in val.items()
             }
+
+            sig = inspect.signature(schema.cls)
+            # TODO: ...
             return schema.cls(**ctor_args)
 
 
