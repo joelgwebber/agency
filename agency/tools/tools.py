@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+import inspect
+import traceback
 from dataclasses import dataclass
 from enum import Enum
-import traceback
-import inspect
 from typing import Any, Callable, Dict, List, Optional
 
 from google.cloud.aiplatform_v1beta1 import FunctionCall
 from vertexai.generative_models import FunctionDeclaration, Part
 from vertexai.generative_models import Tool as LangTool
 
-from agency.utils import timestamp
+from agency.utils import print_proto, timestamp
 
 DECL_KEY = "_decl"
 SCHEMA_KEY = "_schema"
@@ -88,7 +88,10 @@ class Schema:
             d["enum"] = self.enum
 
         if self.typ == Type.Object:
-            if self.prop_schemae is None:
+            if self.item_schema is not None:
+                # TODO: Confirm this will work properly for an open-ended dict in OpenAPI.
+                return d
+            elif self.prop_schemae is None:
                 raise Exception("Object type requires prop_schemae")
 
             d["properties"] = {}
@@ -259,6 +262,9 @@ def _parse_val(val: Any, schema: Optional[Schema]) -> Any:
 
         # Objects.
         case Type.Object:
+            if schema.item_schema is not None:
+                # TODO: Validate item type.
+                return dict(val.items())
             if schema.prop_schemae is None or schema.cls is None:
                 raise Exception(
                     f"Need property schemae to parse object {val} : {schema}"

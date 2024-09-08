@@ -15,7 +15,7 @@ from agency.tools.search import Search
 
 TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
 
-work_dir = "work/research"
+work_dir = "work/world"
 dbclient = chromadb.PersistentClient(work_dir + "/chroma")
 
 # This is the most recent embedding model I'm aware of.
@@ -24,7 +24,7 @@ embed_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
 
 tools: List[Tool] = [
     Recipes(embed_model, dbclient, "recipes", "world/recipes"),
-    Notebook(embed_model, dbclient),
+    Notebook(embed_model, dbclient, work_dir + "/notebook", "world/knowledge"),
     Search(TAVILY_API_KEY),
     Browse(),
 ]
@@ -32,9 +32,14 @@ tools: List[Tool] = [
 sys_instr = """
 You are an assistant helping to construct fictional settings and background material. When generating content and
 answering questions, always maintain consistency with existing material, available as project knowledge.
+
+Notes and recipes are in Markdown format, and can be linked using the [[note-id]] syntax. When creating and updating
+notes, try to ensure that links are created for other notes known to exist.
 """
 
 sys_suffix = """
+DO NOT write or update notes until explicitly asked to do so. Before making changes, give a simple description of the
+changes you intend to make, and ask for confirmation.
 """
 
 # Use Gemini 1.5 Flash.

@@ -99,6 +99,11 @@ def _ensure_schema(cls: type, desc: str, default: Optional[Any] = None) -> Schem
         item_type = cls.__args__[0]  # pyright: ignore
         return Schema(Type.Array, desc, item_schema=_ensure_schema(item_type, ""))
 
+    # Dict types.
+    elif _is_dict(cls):
+        item_type = cls.__args__[1]
+        return Schema(Type.Object, desc, item_schema=item_type)
+
     # Object types:
     elif is_dataclass(cls):
         # Compute schema properties from fields.
@@ -136,5 +141,12 @@ def _is_type(a, b) -> bool:
 
 
 def _is_list(typ) -> bool:
-    # Seriously?! Fucking python has bolted generics in the most confusing way imaginable.
-    return getattr(typ, "__origin__", None) is list
+    return isinstance(typ, type(List)) or (
+        hasattr(typ, "__origin__") and typ.__origin__ is list
+    )
+
+
+def _is_dict(typ) -> bool:
+    return isinstance(typ, type(Dict)) or (
+        hasattr(typ, "__origin__") and typ.__origin__ is dict
+    )

@@ -24,7 +24,7 @@ embed_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
 
 tools: List[Tool] = [
     Recipes(embed_model, dbclient, "recipes", "research/recipes"),
-    Notebook(embed_model, dbclient),
+    Notebook(embed_model, dbclient, "work/research/notebook", "research/notebook"),
     Search(TAVILY_API_KEY),
     Browse(),
 ]

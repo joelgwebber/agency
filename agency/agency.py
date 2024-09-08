@@ -22,6 +22,9 @@ When asked a question, ALWAYS do the following:
 - Use any appropriate ideas and constraints from recipes to inform function calls.
 - Complete the request using the available functions.
 - Use your existing context as much as possible to avoid duplicate work.
+
+If a function call returns an error, stop immediately, display the error, and suggest
+possible solutions.
 """
 
 
