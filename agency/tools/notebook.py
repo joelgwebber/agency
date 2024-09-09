@@ -6,7 +6,7 @@ from vertexai.language_models import TextEmbeddingModel
 
 from agency.tools import Tool
 from agency.tools.annotations import decl, prop, schema
-from agency.tools.docstore import Docstore
+from agency.tools.docstore import Doc, Docstore
 
 
 @schema()
@@ -44,18 +44,17 @@ class Notebook(Tool):
         self,
         embed_model: TextEmbeddingModel,
         dbclient: chromadb.api.ClientAPI,
-        work_dir: str,
-        *dirs: str,
+        dir: str,
     ):
         Tool.__init__(self)
-        self._store = Docstore(embed_model, dbclient, "notebook", work_dir, *dirs)
+        self._store = Docstore(embed_model, dbclient, "notebook", dir)
         self.declare(self.record_note)
         self.declare(self.remove_note)
         self.declare(self.lookup_notes)
 
     @decl(
         "record_note",
-        "Records a note in the notebook for later research.",
+        "Records a note in the notebook for later research. Try to use a simple semantic id.",
     )
     def record_note(self, args: RecordNoteArgs) -> None:
         self._store.create(_clean(args.id), _clean(args.text), args.labels)
@@ -77,7 +76,7 @@ class Notebook(Tool):
         self._store.delete(_clean(args.id))
 
     @decl("lookup_note", "Looks up notes in the notebook.")
-    def lookup_notes(self, args: LookupNotesArgs) -> List[str]:
+    def lookup_notes(self, args: LookupNotesArgs) -> List[Doc]:
         return self._store.find(args.reference, args.max_results)
 
 

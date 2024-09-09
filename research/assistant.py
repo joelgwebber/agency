@@ -12,6 +12,7 @@ from agency.tools.browse import Browse
 from agency.tools.notebook import Notebook
 from agency.tools.recipes import Recipes
 from agency.tools.search import Search
+from agency.ui import AgencyUI
 
 TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
 
@@ -23,8 +24,8 @@ dbclient = chromadb.PersistentClient(work_dir + "/chroma")
 embed_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
 
 tools: List[Tool] = [
-    Recipes(embed_model, dbclient, "recipes", "research/recipes"),
-    Notebook(embed_model, dbclient, "work/research/notebook", "research/notebook"),
+    Recipes(embed_model, dbclient, "research/recipes"),
+    Notebook(embed_model, dbclient, "research/notebook"),
     Search(TAVILY_API_KEY),
     Browse(),
 ]
@@ -46,4 +47,10 @@ model = GenerativeModel(
     ],
 )
 
-agency = Agency(model, tools)
+
+def run():
+    agency = Agency(model, tools)
+    AgencyUI(agency).run()
+
+
+run()

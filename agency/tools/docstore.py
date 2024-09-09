@@ -24,8 +24,7 @@ class Docstore:
         embed_model: TextEmbeddingModel,
         dbclient: chromadb.api.ClientAPI,
         name: str,
-        work_dir: Optional[str],
-        *dirs: str,
+        dir: str,
     ):
         # TODO: Perform garbage collection for stale entries. Otherwise the database
         #   gets cluttered up with old docs and versions of them.
@@ -34,9 +33,8 @@ class Docstore:
         self._coll = dbclient.create_collection(name=name, get_or_create=True)
 
         # Update recipes from disk contents.
-        self._work_dir = work_dir
-        for dir in dirs:
-            self._load_dir(dir)
+        self._work_dir = dir
+        self._load_dir(dir)
 
     def exists(self, id: str) -> Tuple[bool, Dict[str, str]]:
         result = self._coll.get(ids=id, include=["metadatas"])

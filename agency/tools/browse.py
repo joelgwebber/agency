@@ -14,8 +14,10 @@ class BrowseArgs:
     url: str = prop("The url to fetch")
 
 
+# NOTE: The unstructured partition() function is skipping some elements for HTML,
+# including the use of <figure>, which is quite common on Wikipedia and other sources.
+# Filed a bug here: https://github.com/Unstructured-IO/unstructured/issues/3606
 class Browse(Tool):
-
     def __init__(self):
         Tool.__init__(self)
         self.declare(self.browse_url)
@@ -40,21 +42,40 @@ class Browse(Tool):
                 return repr(e)
 
             # Parse out the elements using unstructured.partition.
-            # TODO: Why isn't this getting navigation links?
+            # TODO: Why isn't this getting navigation links or images?
             texts: List[str] = []
             elems = partition(file=file, content_type=content_type)
             for elem in elems:
                 meta = elem.metadata
+
+                # Text
                 if elem.text != "":
                     texts.append(elem.text)
+
+                # Links
                 if meta.link_texts is not None and meta.link_urls is not None:
-                    for idx, text in enumerate(meta.link_texts or []):
-                        # TODO: Deal with <base> tag?
-                        resolved_url = urljoin(args.url, meta.link_urls[idx])
-                        text = text or ""
-                        texts.append(f"[{text.strip()}]({resolved_url})")
+                    for idx, text in enumerate(meta.link_texts):
+                        texts.append(_format_link(args.url, meta.link_urls[idx], text))
+
+                # Images
+                if meta.image_path is not None:
+                    print(f"--> image: {elem}")
+                    texts.append("!" + _format_image(args.url, meta.image_path))
 
             return "\n".join(texts)
+
+
+def _format_link(base: str, url: str, text: str) -> str:
+    # TODO: Deal with <base> tag.
+    resolved_url = urljoin(base, url)
+    text = text or ""
+    return f"[{text.strip()}]({resolved_url})"
+
+
+def _format_image(base: str, url: str) -> str:
+    # TODO: Deal with <base> tag.
+    resolved_url = urljoin(base, url)
+    return f"![[{resolved_url}]]"
 
 
 def _content_type(rsp: Optional[Response]) -> str:

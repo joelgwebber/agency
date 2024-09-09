@@ -137,15 +137,15 @@ class Agency:
     def inputs(self) -> List[Part]:
         return self._inputs
 
-    def ask(self, question: str) -> None:
+    def ask(self, question: str) -> Generator[str, None, None]:
         self.new_question(question)
         while not self.is_finished():
             for thought in self.think():
                 match thought.typ:
                     case "message":
-                        print(">", thought.content)
+                        yield thought.content
                     case "tool":
-                        print(">", thought.tool)  # , thought.content)
+                        yield f"(calling {thought.tool})"
 
     def new_question(self, question: str):
         self._inputs.append(Part.from_text(question))

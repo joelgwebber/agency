@@ -1,0 +1,5 @@
+---
+subject: Music Theory
+topic: Neo-Riemannian Analysis
+---
+Neo-Riemannian theory is a way to analyze music by focusing on the relationships between triads, particularly in tonal music. It uses transformations like "L" (leading-tone exchange), "P" (parallel), and "R" (relative) to create new, related triads. For example, "L" swaps the root and leading tone of a triad (C major becomes D minor), "P" changes the major/minor quality (C major becomes C minor), and "R" moves a triad to its relative major or minor (C major becomes A minor). These transformations can be combined to create complex relationships between chords. Neo-Riemannian theory has been used to analyze a wide range of music, from classical to jazz, and has been particularly influential in understanding the harmonic language of composers like Wagner and Debussy. For more information on how Neo-Riemannian theory relates to other music theories, see [[NeoRiemannianRelations]].
