@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from google.cloud.aiplatform_v1beta1 import FunctionCall
-from vertexai.generative_models import FunctionDeclaration, Part
+from vertexai.generative_models import FunctionCall, FunctionDeclaration, Part
 from vertexai.generative_models import Tool as LangTool
 
 from agency.utils import print_proto, timestamp

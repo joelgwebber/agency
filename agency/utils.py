@@ -4,11 +4,11 @@ from datetime import datetime
 from typing import List
 
 import pytz
-from google.cloud.aiplatform_v1beta1 import FunctionCall, FunctionResponse
+from google.cloud.aiplatform_v1 import FunctionResponse
 from IPython.display import Markdown, display
 from proto.marshal.collections.maps import MapComposite
 from proto.marshal.collections.repeated import RepeatedComposite
-from vertexai.generative_models import Part
+from vertexai.generative_models import FunctionCall, Part
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
 

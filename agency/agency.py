@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Generator, List, Literal, Optional, cast
 
-from vertexai.generative_models import ChatSession, Content, GenerativeModel, Part
+from vertexai.generative_models import (ChatSession, Content, GenerativeModel,
+                                        Part)
 
 from agency.tools import Tool, ToolBox
 from agency.utils import part_is_text, print_tool

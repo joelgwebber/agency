@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "agency"
+version = "0.1.0"
+description = ""
+authors = ["Joel Webber <jgw@pobox.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+ipython = "^8.28.0"
+pytest = "^8.3.3"
+black = "^24.10.0"
+isort = "^5.13.2"
+chromadb = "^0.5.20"
+vertexai = "^1.71.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
