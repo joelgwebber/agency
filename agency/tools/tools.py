@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, List, Optional
 from vertexai.generative_models import FunctionCall, FunctionDeclaration, Part
 from vertexai.generative_models import Tool as LangTool
 
-from agency.utils import print_proto, timestamp
+from agency.utils import timestamp
 
 DECL_KEY = "_decl"
 SCHEMA_KEY = "_schema"
@@ -115,16 +115,16 @@ class Decl:
     fn: Callable
     name: str
     desc: str
-    args: Schema
+    params: Schema
 
-    def __init__(self, fn: Callable, name: str, desc: str, args: Any):
+    def __init__(self, fn: Callable, name: str, desc: str, params: Any):
         self.fn = fn
         self.name = name
         self.desc = desc
-        if isinstance(args, Schema):
-            self.args = args
+        if isinstance(params, Schema):
+            self.params = params
         else:
-            self.args = Schema(Type.Object, "", prop_schemae=args)
+            self.params = Schema(Type.Object, "", prop_schemae=params)
 
 
 class Tool:
@@ -152,17 +152,17 @@ class Tool:
             FunctionDeclaration(
                 name=decl.name,
                 description=decl.desc,
-                parameters=decl.args.to_openapi(),
+                parameters=decl.params.to_openapi(),
             )
         )
 
     def dispatch(self, fn: FunctionCall) -> Part:
         decl = self._decls[fn.name]
-        if decl.args.prop_schemae is None:
+        if decl.params.prop_schemae is None:
             raise Exception("Bad declaration. This shouldn't happen.")
 
         # Parse args and call the target function.
-        args = _parse_val(fn.args, decl.args)
+        args = _parse_val(fn.args, decl.params)
         result = decl.fn(self, args)
 
         # TODO: Why the hell does this blow up now?

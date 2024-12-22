@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Generator, List, Literal, Optional, cast
 
-from vertexai.generative_models import (ChatSession, Content, GenerativeModel,
-                                        Part)
+from vertexai.generative_models import ChatSession, Content, GenerativeModel, Part
 
 from agency.tools import Tool, ToolBox
 from agency.utils import part_is_text, print_tool
@@ -106,73 +105,79 @@ init_shots = [
 @dataclass
 class Thought:
     typ: Literal["message", "tool"]
-    tool: str
     content: str
 
 
 class Agency:
     _chat: ChatSession
-    _inputs: List[Part]
-    _toolbox: ToolBox
     _log: List[List[str]]
+    _stack: List[Minion]
 
     def __init__(
         self,
         model: GenerativeModel,
-        tools: List[Tool],
+        minion: Minion,
         history: Optional[List[Content]] = None,
     ):
         if history == None:
             history = init_shots
 
-        self._toolbox = ToolBox(tools)
+        self._stack = [minion]
         self._chat = model.start_chat(response_validation=False, history=history)
-        self._inputs = []
         self._log = []
 
     @property
     def history(self) -> List[Content]:
         return self._chat.history
 
-    @property
-    def inputs(self) -> List[Part]:
-        return self._inputs
+    def top_minion(self) -> Minion:
+        return self._stack[-1]
 
     def ask(self, question: str) -> Generator[str, None, None]:
-        self.new_question(question)
-        while not self.is_finished():
-            for thought in self.think():
+        self.top_minion().new_question(question)
+
+        while not self.top_minion().is_finished():
+            for thought in self.top_minion().think(self._chat):
                 match thought.typ:
                     case "message":
                         yield thought.content
                     case "tool":
-                        yield f"(calling {thought.tool})"
+                        yield f"(calling {thought.content})"
 
-    def new_question(self, question: str):
-        self._inputs.append(Part.from_text(question))
 
-    def is_finished(self) -> bool:
-        return len(self._inputs) == 0
+class Minion:
+    _inputs: List[Part]
+    _toolbox: ToolBox
 
-    def think(self) -> Generator[Thought, None, None]:
+    def __init__(self, tools: List[Tool]):
+        self._toolbox = ToolBox(tools)
+        self._inputs = []
+
+    def think(self, chat: ChatSession) -> Generator[Thought, None, None]:
         new_inputs = []
-        outputs = self._send(self._inputs)
+        outputs = self._send(chat, self._inputs)
         for part in outputs:
             if part_is_text(part):
                 # Sometimes we get whitespace-only.
                 if part.text.strip() != "":
-                    yield Thought("message", "", part.text)
+                    yield Thought("message", part.text)
             else:
                 call = part.function_call
                 rsp_part = self._toolbox.dispatch(call)
                 rsp = rsp_part.function_response
                 new_inputs.append(rsp_part)
-                yield Thought("tool", call.name, print_tool(call, rsp))
+                yield Thought("tool", print_tool(call, rsp))
 
         self._inputs = new_inputs
 
-    def _send(self, parts: List[Part]) -> List[Part]:
-        rsp = self._chat.send_message(
+    def is_finished(self) -> bool:
+        return len(self._inputs) == 0
+
+    def new_question(self, question: str):
+        self._inputs.append(Part.from_text(question))
+
+    def _send(self, chat: ChatSession, parts: List[Part]) -> List[Part]:
+        rsp = chat.send_message(
             cast(List, parts),
             tools=[self._toolbox.lang_tools],
             generation_config={"temperature": 0},
