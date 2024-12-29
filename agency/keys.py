@@ -1,0 +1,4 @@
+import os
+
+TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
+OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]

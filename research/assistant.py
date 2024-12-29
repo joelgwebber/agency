@@ -1,55 +1,58 @@
 import os
 
 import chromadb
-from vertexai.generative_models import GenerativeModel, Part
-from vertexai.language_models import TextEmbeddingModel
 
 from agency import Agency
-from agency.agency import Minion, required_instructions
+from agency.keys import TAVILY_API_KEY
+from agency.minions import MinionDecl
+from agency.tools.annotations import schema, schema_for
 from agency.tools.browse import Browse
-from agency.tools.notebook import Notebook
-from agency.tools.recipes import Recipes
+from agency.tools.docstore import Docstore
+from agency.tools.feedback import GetFeedback, SubmitFeedback
+from agency.tools.notebook import LookupNotes, RecordNote, RemoveNote, UpdateNote
 from agency.tools.search import Search
 from agency.ui import AgencyUI
 
-TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
-
-work_dir = "work/research"
-dbclient = chromadb.PersistentClient(work_dir + "/chroma")
-
-# This is the most recent embedding model I'm aware of.
-# It has a 2k input limit, so we might have to break some things up.
-embed_model = TextEmbeddingModel.from_pretrained("text-embedding-004")
-
-sys_instr = "You are a research assistant, helping your human understand any topic."
-sys_suffix = """
-- Use the notebook to record notes as you go, looking them up by subject when needed.
-- DO NOT use any other information to answer questions.
-"""
+tool_name = "research"
+dbclient = chromadb.PersistentClient(os.path.join(tool_name, "chroma"))
+fb_coll = dbclient.get_or_create_collection("feedback")
+notebook = Docstore(dbclient, tool_name, "notebook")
 
 
-# Use Gemini 1.5 Flash.
-model = GenerativeModel(
-    "gemini-1.5-flash-preview-0514",
-    system_instruction=[
-        Part.from_text(sys_instr),
-        Part.from_text(required_instructions),
-        Part.from_text(sys_suffix),
+@schema()
+class ResearchArgs:
+    question: str
+
+
+ResearchAssistant = MinionDecl(
+    "research-assistant",
+    "A research assistant",
+    schema_for(ResearchArgs),
+    """You are a research assistant, helping your human understand any topic.
+    - Use the notebook to record notes as you go, looking them up by subject when needed
+    - DO NOT use any other information to answer questions
+    - Always cite your sources
+    Current question: {{ question }}""",
+    [
+        Search.decl,
+        Browse.decl,
+        RecordNote.decl,
+        UpdateNote.decl,
+        RemoveNote.decl,
+        LookupNotes.decl,
     ],
 )
 
+tools = [
+    Browse(),
+    Search(TAVILY_API_KEY),
+    RecordNote(notebook),
+    UpdateNote(notebook),
+    RemoveNote(notebook),
+    LookupNotes(notebook),
+    SubmitFeedback(fb_coll),
+    GetFeedback(fb_coll),
+]
 
-class Researcher(Minion):
-    def __init__(self):
-        super().__init__(
-            [
-                Recipes(embed_model, dbclient, "research/recipes"),
-                Notebook(embed_model, dbclient, "research/notebook"),
-                Search(TAVILY_API_KEY),
-                Browse(),
-            ]
-        )
-
-
-agency = Agency(model, Researcher())
-AgencyUI(agency).run()
+agency = Agency(tools, [ResearchAssistant])
+AgencyUI(agency, ResearchAssistant.id).run()

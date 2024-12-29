@@ -1,44 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import Field, dataclass, field, fields, is_dataclass
+from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass
 from enum import Enum
 from inspect import isclass
-from typing import Any, Dict, List, Optional, get_type_hints
+from typing import Any, Callable, Dict, Iterable, List, Optional, cast, get_type_hints
 
-from agency.tools.tools import DECL_KEY, SCHEMA_KEY, Decl, Schema, Type
+from agency.tools.tools import SCHEMA_KEY, Schema, Type
 from agency.utils import timestamp
-
-ARGS_NAME = "args"
-
-
-# TODO: Figure out how to fix field()'s type checker magic here.
-# Returning the correct Field[T] breaks callers.
-def prop(desc: str, *, default: Any = None) -> Any:
-    """TODO: doc"""
-    if default is not None:
-        return field(default=default, metadata={"desc": desc})
-    return field(metadata={"desc": desc})
-
-
-def decl(func_name: str, func_desc: str):
-    """TODO: doc"""
-
-    def decorator(func):
-        hints = get_type_hints(func)
-        if len(hints) > 2 or ARGS_NAME not in hints:
-            # TODO: Check this more carefully. It should be either (args) or (self, args), but sometimes
-            # we get just (args) for methods.
-            raise Exception(f"@{decl.__name__} may have only a single 'args' parameter")
-
-        args = hints[ARGS_NAME]
-        setattr(
-            func,
-            DECL_KEY,
-            Decl(func, func_name, func_desc, _schema_for(args)),
-        )
-        return func
-
-    return decorator
 
 
 def schema(cls_desc: str = ""):
@@ -57,9 +25,28 @@ def schema(cls_desc: str = ""):
     return decorator
 
 
-def _schema_for(cls: type) -> Schema:
+# TODO: Figure out how to fix field()'s type checker magic here.
+# Returning the correct Field[T] breaks callers.
+def prop(
+    desc: str,
+    *,
+    default: Any = None,
+    default_factory: Optional[Callable] = None,
+) -> Any:
+    """TODO: doc"""
+
+    if default_factory:
+        return field(default_factory=default_factory, metadata={"desc": desc})
+    elif default:
+        return field(default=default, metadata={"desc": desc})
+    return field(metadata={"desc": desc})
+
+
+def schema_for(cls: type) -> Schema:
+    """TODO: doc"""
+
     if not hasattr(cls, SCHEMA_KEY):
-        raise Exception(f"{cls} requires the @lmschema annotation")
+        raise Exception(f"{cls} requires the @schema annotation")
     return getattr(cls, SCHEMA_KEY)
 
 
@@ -72,37 +59,44 @@ def _ensure_schema(cls: type, desc: str, default: Optional[Any] = None) -> Schem
 
     # Builtin types. These can't be cached, because of descriptions and defaults.
     elif cls == str:
-        return Schema(Type.String, desc, default)
+        return Schema(typ=Type.String, desc=desc, default=default)
     elif cls == int:
-        return Schema(Type.Integer, desc, default)
+        return Schema(typ=Type.Integer, desc=desc, default=default)
     elif cls == float:
-        return Schema(Type.Real, desc, default)
+        return Schema(typ=Type.Real, desc=desc, default=default)
     elif cls == bool:
-        return Schema(Type.Boolean, desc, default)
+        return Schema(typ=Type.Boolean, desc=desc, default=default)
     elif _is_type(cls, timestamp):
-        return Schema(Type.DateTime, desc, default)
+        return Schema(typ=Type.DateTime, desc=desc, default=default)
 
     # Enums.
     elif _is_enum(cls):
         enums: List[str] = []
-        for enum in cls:
+        for enum in cast(Iterable, cls):
             # Ensure all are strings.
             # TODO: Are other types supported in OpenAPI?
             if type(enum.value) is not str:
                 raise TypeError(f"expected str for {enum}; got {enum.value}")
             enums.append(enum.value)
-        return Schema(Type.String, desc, default, enum=enums)
+        return Schema(typ=Type.String, desc=desc, default=default, enum=enums)
 
     # List types.
     elif _is_list(cls):
         # TODO:: better errors. Should items get a separate description?
         item_type = cls.__args__[0]  # pyright: ignore
-        return Schema(Type.Array, desc, item_schema=_ensure_schema(item_type, ""))
+        return Schema(
+            typ=Type.Array,
+            desc=desc,
+            default=default,
+            item_schema=_ensure_schema(item_type, ""),
+        )
 
     # Dict types.
     elif _is_dict(cls):
         item_type = cls.__args__[1]
-        return Schema(Type.Object, desc, item_schema=item_type)
+        return Schema(
+            typ=Type.Object, desc=desc, default=default, item_schema=item_type
+        )
 
     # Object types:
     elif is_dataclass(cls):
@@ -110,13 +104,22 @@ def _ensure_schema(cls: type, desc: str, default: Optional[Any] = None) -> Schem
         props: Dict[str, Schema] = {}
         hints = get_type_hints(cls)
         for prop_fld in fields(cls):
+            # Compute default value
+            prop_default = None
+            if prop_fld.default_factory != MISSING:
+                prop_default = cast(Callable, prop_fld.default_factory)()
+            elif prop_fld.default != MISSING:
+                prop_default = prop_fld.default
+
             prop_type = hints[prop_fld.name]
             props[prop_fld.name] = _ensure_schema(
-                prop_type, _meta_desc(prop_fld), prop_fld.default
+                prop_type, _meta_desc(prop_fld), prop_default
             )
 
         # Use cls_desc, ignoring the field's description.
-        schema = Schema(Type.Object, desc, prop_schemae=props, cls=cls)
+        schema = Schema(
+            typ=Type.Object, desc=desc, default=default, prop_schemae=props, cls=cls
+        )
         setattr(cls, SCHEMA_KEY, schema)
         return schema
 

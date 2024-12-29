@@ -1,1 +1,0 @@
-We will try to avoid direct connections to existing human cultures. The world we envision is so far removed from present experience that only scraps of our cultures are preserved, loosely interpreted and cross-pollinated across many existing cultures.

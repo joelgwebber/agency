@@ -5,25 +5,28 @@ from urllib.parse import urljoin
 from playwright.sync_api import Response, sync_playwright
 from unstructured.partition.auto import partition
 
-from agency.tools import Tool
-from agency.tools.annotations import decl, prop, schema
-
-
-@schema()
-class BrowseArgs:
-    url: str = prop("The url to fetch")
+from agency.tools.annotations import prop, schema, schema_for
+from agency.tools.tools import ToolDecl, parse_val
+from agency.types import Tool, ToolCall, ToolResult
 
 
 # NOTE: The unstructured partition() function is skipping some elements for HTML,
 # including the use of <figure>, which is quite common on Wikipedia and other sources.
 # Filed a bug here: https://github.com/Unstructured-IO/unstructured/issues/3606
 class Browse(Tool):
-    def __init__(self):
-        Tool.__init__(self)
-        self.declare(self.browse_url)
+    @schema()
+    class Args:
+        url: str = prop("The url to fetch")
 
-    @decl("browse_url", "Returns the contents at the specified URL.")
-    def browse_url(self, args: BrowseArgs) -> str:
+    decl = ToolDecl(
+        "browse-url",
+        "Returns the contents at the specified URL.",
+        schema_for(Args),
+    )
+
+    def invoke(self, req: ToolCall) -> ToolResult:
+        args = parse_val(req.args, Browse.decl.params)
+
         with sync_playwright() as p:
             try:
                 # Fetch the content using a real browser via playwright, as bytes.
@@ -39,7 +42,7 @@ class Browse(Tool):
                 file = io.BytesIO(bytes(page.content(), "UTF-8"))
                 browser.close()
             except Exception as e:
-                return repr(e)
+                return ToolResult({"error": repr(e)})
 
             # Parse out the elements using unstructured.partition.
             # TODO: Why isn't this getting navigation links or images?
@@ -62,7 +65,7 @@ class Browse(Tool):
                     print(f"--> image: {elem}")
                     texts.append("!" + _format_image(args.url, meta.image_path))
 
-            return "\n".join(texts)
+            return ToolResult({"text": "\n".join(texts)})
 
 
 def _format_link(base: str, url: str, text: str) -> str:

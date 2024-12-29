@@ -3,55 +3,68 @@ from typing import List
 import chromadb
 import chromadb.api
 
-from agency.tools import Tool
-from agency.tools.annotations import prop, schema, decl
-from agency.utils import timestamp, embed
+from agency.embedding import embed_text
+from agency.tools.annotations import prop, schema, schema_for
+from agency.tools.tools import ToolDecl, parse_val
+from agency.types import Tool, ToolCall, ToolResult
+from agency.utils import timestamp
 
 
-@schema()
-class SubmitFeedbackArgs:
-    expectation: str = prop("What the user expected")
-    context: str = prop(
-        """What actually happened, with any context useful to reproduce.
-        Be as verbose as necessary to allow for reproduction of the issue."""
+class SubmitFeedback(Tool):
+    @schema()
+    class Args:
+        expectation: str = prop("What the user expected")
+        context: str = prop(
+            """What actually happened, with any context useful to reproduce.
+            Be as verbose as necessary to allow for reproduction of the issue."""
+        )
+
+    decl = ToolDecl(
+        "submit-feedback",
+        "Submits feedback on an interaction",
+        schema_for(Args),
     )
 
+    _coll: chromadb.Collection
 
-@schema()
-class GetFeedbackArgs:
-    query: str = prop("What the user expected")
-    begin: timestamp = prop("The beginning time range")
-    end: timestamp = prop("The ending time range")
+    def __init__(self, coll: chromadb.Collection):
+        self._coll = coll
 
-
-class Feedback(Tool):
-    _feedback_coll: chromadb.Collection
-
-    def __init__(self, dbclient: chromadb.api.ClientAPI):
-        Tool.__init__(self)
-
-        self.declare(self.submit_feedback)
-        self.declare(self.get_feedback)
-
-        self._feedback_coll = dbclient.create_collection(
-            name="feedback", get_or_create=True
-        )
-
-    @decl("submit_feedback", "Submits feedback on an interaction")
-    def submit_feedback(self, args: SubmitFeedbackArgs) -> None:
+    def invoke(self, req: ToolCall) -> ToolResult:
+        args = parse_val(req.args, SubmitFeedback.decl.params)
         when = timestamp.now().timestamp()
         doc = f"Expected:\n{args.expectation}\nContext:\n{args.context}"
-        self._feedback_coll.add(
+        self._coll.add(
             ids=str(when),
             documents=doc,
-            embeddings=embed(doc),
+            embeddings=embed_text(doc).tolist(),
             metadatas={"when": when},
         )
+        return ToolResult({})
 
-    @decl("get_feedback", "Gets user feedback within a specified time range")
-    def get_feedback(self, args: GetFeedbackArgs) -> List[List[str]]:
-        rsp = self._feedback_coll.query(
-            query_embeddings=embed(args.query),
+
+class GetFeedback(Tool):
+    @schema()
+    class Args:
+        query: str = prop("What the user expected")
+        begin: timestamp = prop("The beginning time range")
+        end: timestamp = prop("The ending time range")
+
+    decl = ToolDecl(
+        "get-feedback",
+        "Gets user feedback within a specified time range",
+        schema_for(Args),
+    )
+
+    _coll: chromadb.Collection
+
+    def __init__(self, coll: chromadb.Collection):
+        self._coll = coll
+
+    def invoke(self, req: ToolCall) -> ToolResult:
+        args = parse_val(req.args, GetFeedback.decl.params)
+        rsp = self._coll.query(
+            query_embeddings=embed_text(args.query).tolist(),
             where={
                 "$and": [
                     {"when": {"$gte": args.begin.timestamp()}},
@@ -68,4 +81,4 @@ class Feedback(Tool):
                 when = timestamp.fromtimestamp(float(metas[i]["when"]))
                 result.append([when.isoformat(), docs[i]])
 
-        return result
+        return ToolResult({"feedback": result})

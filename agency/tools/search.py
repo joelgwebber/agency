@@ -4,31 +4,35 @@ from typing import Dict, List, Optional, Union
 
 import requests
 
-from agency.tools import Tool
-from agency.tools.annotations import decl, prop, schema
+from agency.tools.annotations import prop, schema, schema_for
+from agency.tools.tools import ToolDecl, parse_val
+from agency.types import Tool, ToolCall, ToolResult
 
 # Just use Tavily for now.
 _TAVILY_API_URL = "https://api.tavily.com"
 
 
-@schema()
-class SearchArgs:
-    query: str = prop("The url to fetch")
-    max_results: int = prop("Maximum number of results", default=5)
-
-
 class Search(Tool):
+    @schema()
+    class Args:
+        query: str = prop("The url to fetch")
+        max_results: int = prop("Maximum number of results", default=5)
+
+    decl = ToolDecl(
+        "search-query",
+        "Performs a web search",
+        schema_for(Args),
+    )
+
     _api_key: str
 
     def __init__(self, api_key: str):
-        Tool.__init__(self)
         self._api_key = api_key
-        self.declare(self.search_query)
 
-    @decl("search_query", "Performs a web search.")
-    def search_query(self, args: SearchArgs) -> Union[Dict, List[Dict]]:
+    def invoke(self, req: ToolCall) -> ToolResult:
+        args = parse_val(req.args, Search.decl.params)
         raw_json = self._raw_results(args.query, args.max_results)
-        return self._clean_results(raw_json)
+        return ToolResult({"results": self._clean_results(raw_json)})
 
     def _raw_results(
         self,

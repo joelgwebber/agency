@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-import inspect
-import traceback
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from vertexai.generative_models import FunctionCall, FunctionDeclaration, Part
-from vertexai.generative_models import Tool as LangTool
-
+from agency.router import FunctionDesc, OpenAPISchema
 from agency.utils import timestamp
 
-DECL_KEY = "_decl"
 SCHEMA_KEY = "_schema"
 
 
@@ -55,7 +50,7 @@ class Schema:
     flavors used by language-model function calling interfaces."""
 
     typ: Type
-    desc: Optional[str] = None
+    desc: str
     default: Any = None
 
     # Enumeration options.
@@ -72,12 +67,12 @@ class Schema:
 
     # TODO: This is very Gemini-specific at the moment.
     # Should be easy to generalize to other function-calling model APIs.
-    def to_openapi(self) -> Dict[str, Any]:
+    def to_openapi(self) -> OpenAPISchema:
         """Produces a dictionary in the structure expected by the Gemini / OpenAPI schema."""
 
         # TODO: Better validation of valid states (e.g., enums with primitives, etc).
 
-        d: Dict[str, Any] = {
+        d: OpenAPISchema = {
             "type": _openapi_type[self.typ],
             "format": self.typ.value,
             "description": self.desc,
@@ -109,136 +104,28 @@ class Schema:
 
 
 @dataclass
-class Decl:
+class ToolDecl:
     """TODO: doc"""
 
-    fn: Callable
-    name: str
+    id: str
     desc: str
     params: Schema
 
-    def __init__(self, fn: Callable, name: str, desc: str, params: Any):
-        self.fn = fn
-        self.name = name
+    def __init__(self, name: str, desc: str, params: Schema):
+        self.id = name
         self.desc = desc
-        if isinstance(params, Schema):
-            self.params = params
-        else:
-            self.params = Schema(Type.Object, "", prop_schemae=params)
+        self.params = params
 
-
-class Tool:
-    _decls: Dict[str, Decl]
-    _funcs: List[FunctionDeclaration]
-
-    def __init__(self):
-        self._funcs = []
-        self._decls = {}
-
-    @property
-    def funcs(self) -> List[FunctionDeclaration]:
-        """TODO: doc"""
-        return self._funcs
-
-    def declare(self, func: Callable) -> None:
-        """TODO: doc"""
-
-        decl = _decl_for(func)
-        if decl.name in self._decls:
-            raise Exception(f"duplicate declaration {decl.name}")
-
-        self._decls[decl.name] = decl
-        self._funcs.append(
-            FunctionDeclaration(
-                name=decl.name,
-                description=decl.desc,
-                parameters=decl.params.to_openapi(),
-            )
-        )
-
-    def dispatch(self, fn: FunctionCall) -> Part:
-        decl = self._decls[fn.name]
-        if decl.params.prop_schemae is None:
-            raise Exception("Bad declaration. This shouldn't happen.")
-
-        # Parse args and call the target function.
-        args = _parse_val(fn.args, decl.params)
-        result = decl.fn(self, args)
-
-        # TODO: Why the hell does this blow up now?
-        # return Part.from_function_response(
-        #     fn.name, response={"content": {"result": result}}
-        # )
-
-        # This is a hack, but works.
-        return Part.from_dict(
-            {
-                "function_response": {
-                    "name": fn.name,
-                    "response": {
-                        "content": {
-                            "result": result,
-                        }
-                    },
-                }
-            }
-        )
-
-
-class ToolBox:
-    """TODO: doc"""
-
-    _funcs: List[FunctionDeclaration]
-    _tools: Dict[str, Tool]
-
-    def __init__(
-        self,
-        tools: List[Tool],
-    ):
-        self._funcs = []
-        self._tools = {}
-
-        # Register tools.
-        for tool in tools:
-            self._register(tool)
-
-    def _register(self, tools: Tool) -> None:
-        self._funcs.extend(tools.funcs)
-        for name in tools._decls:
-            if name in self._tools:
-                raise Exception(f"duplicate tool {name}")
-            self._tools[name] = tools
-
-    @property
-    def lang_tools(self) -> LangTool:
-        return LangTool(self._funcs)
-
-    def dispatch(self, fn: FunctionCall) -> Part:
-        try:
-            tool = self._tools[fn.name]
-        except KeyError:
-            return Part.from_function_response(
-                fn.name, {"error": f"unknown function {fn.name}"}
-            )
-
-        try:
-            return tool.dispatch(fn)
-        except Exception as e:
-            # Catch exceptions, log them, and send them to the model in hopes it will sort itself.
-            msg = f"""exception calling {fn.name}: {e}
-                     {"\n".join(traceback.format_exception(e))}"""
-
-            return Part.from_function_response(fn.name, {"error": msg})
-
-
-def _decl_for(func: Callable) -> Decl:
-    if not hasattr(func, DECL_KEY):
-        raise Exception(f"{func} requires the @lmfunc annotation")
-    return getattr(func, DECL_KEY)
+    def to_func(self) -> FunctionDesc:
+        return {
+            "name": self.id,
+            "description": self.desc,
+            "parameters": self.params.to_openapi(),
+        }
 
 
 # `schema` is only optional to avoid making every call-site messy.
-def _parse_val(val: Any, schema: Optional[Schema]) -> Any:
+def parse_val(val: Any, schema: Optional[Schema]) -> Any:
     if schema is None:
         raise Exception(f"Need a value type to parse {val}")
 
@@ -257,7 +144,7 @@ def _parse_val(val: Any, schema: Optional[Schema]) -> Any:
 
         # Arrays.
         case Type.Array:
-            return [_parse_val(item, schema.item_schema) for item in val]
+            return [parse_val(item, schema.item_schema) for item in val]
 
         # Objects.
         case Type.Object:
@@ -271,11 +158,11 @@ def _parse_val(val: Any, schema: Optional[Schema]) -> Any:
 
             # Parse ctor args and instantiate the dataclass.
             ctor_args = {
-                k: _parse_val(v, schema.prop_schemae[k]) for (k, v) in val.items()
+                k: parse_val(v, schema.prop_schemae[k]) for (k, v) in val.items()
             }
 
-            sig = inspect.signature(schema.cls)
-            # TODO: ...
+            # TODO: Validate signature
+            # sig = inspect.signature(schema.cls)
             return schema.cls(**ctor_args)
 
 

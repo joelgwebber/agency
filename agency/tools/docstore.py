@@ -5,7 +5,9 @@ from typing import Dict, List, Optional, Tuple, TypedDict
 
 import chromadb.api
 from chromadb import Metadata
-from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
+from chromadb.api.types import IncludeEnum
+
+from agency.embedding import embed_text
 
 
 class Doc(TypedDict):
@@ -15,29 +17,31 @@ class Doc(TypedDict):
 
 
 class Docstore:
-    _embed_model: TextEmbeddingModel
     _coll: chromadb.Collection
     _work_dir: Optional[str]
 
     def __init__(
         self,
-        embed_model: TextEmbeddingModel,
         dbclient: chromadb.api.ClientAPI,
-        name: str,
         dir: str,
+        name: str,
     ):
         # TODO: Perform garbage collection for stale entries. Otherwise the database
         #   gets cluttered up with old docs and versions of them.
         # For now, just wipe the database after making manual file changes.
-        self._embed_model = embed_model
-        self._coll = dbclient.create_collection(name=name, get_or_create=True)
+        self._coll = dbclient.create_collection(
+            name=name,
+            get_or_create=True,
+            embedding_function=None,  # Use raw embeddings
+            metadata={"dimension": 384},  # Set dimension for 384-vectors
+        )
 
         # Update recipes from disk contents.
-        self._work_dir = dir
-        self._load_dir(dir)
+        self._work_dir = os.path.join(dir, name)
+        self._load_dir(self._work_dir)
 
     def exists(self, id: str) -> Tuple[bool, Dict[str, str]]:
-        result = self._coll.get(ids=id, include=["metadatas"])
+        result = self._coll.get(ids=id, include=[IncludeEnum.metadatas])
         meta = result["metadatas"]
         if meta is not None and len(meta) > 0:
             return True, meta_labels(meta[0])
@@ -70,7 +74,7 @@ class Docstore:
         rsp = self._coll.query(
             query_embeddings=[vec],
             n_results=int(number),
-            include=["documents", "metadatas", "uris"],
+            include=[IncludeEnum.documents, IncludeEnum.metadatas, IncludeEnum.uris],
         )
 
         results: List[Doc] = []
@@ -143,10 +147,7 @@ class Docstore:
         )
 
     def _embed(self, text: str) -> List[float]:
-        # SEMANTIC_SIMILARITY seems to cluster too tightly, leading to repeated entries.
-        inputs: List = [TextEmbeddingInput(text, "CLASSIFICATION")]
-        embeddings = self._embed_model.get_embeddings(inputs)
-        return embeddings[0].values
+        return embed_text(text).tolist()
 
 
 def file_id(file: str) -> str:

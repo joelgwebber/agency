@@ -1,16 +1,15 @@
-import readline  # Do not remove; affects the import() function.
-
 from rich.console import Console
-from rich.markdown import Markdown
 
 from agency.agency import Agency
 
 
 class AgencyUI:
     _agency: Agency
+    _tool_id: str
 
-    def __init__(self, agency: Agency):
+    def __init__(self, agency: Agency, tool_id: str):
         self._agency = agency
+        self._tool_id = tool_id
 
     def run(self):
         console = Console()
@@ -21,13 +20,13 @@ class AgencyUI:
                 match user_input.lower():
                     case "done" | "quit" | "exit":
                         break
-                    case "history":
-                        console.print(self._agency.history)
                     case "":
                         continue
                     case _:
-                        for response in self._agency.ask(user_input):
-                            md = Markdown(response + "\n")
-                            console.print(md)
+                        response = self._agency.ask(
+                            self._tool_id, {"question": user_input}
+                        )
+                        # md = Markdown(response + "\n")
+                        console.print(response)
             except (EOFError, KeyboardInterrupt):
                 break

@@ -1,190 +1,109 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from dataclasses import dataclass
-from datetime import date
-from typing import Any, Generator, List, Literal, Optional, cast
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
-from vertexai.generative_models import ChatSession, Content, GenerativeModel, Part
-
-from agency.tools import Tool, ToolBox
-from agency.utils import part_is_text, print_tool
-
-# Give today's date, because it often gets that wrong.
-# Explicitly request that it use recipes to fuel CoT reasoning.
-required_instructions = f"""
-Today's date is {date.today()}.
-
-When asked a question, ALWAYS do the following:
-- ALWAYS call `find_recipes` BEFORE ANY OTHER FUNCTION, to determine the best approach.
-- Clearly enumerate the steps you plan to take, AFTER getting ideas from `find_recipes`.
-- Summarize the instructions from recipes that inform your plan.
-- Use any appropriate ideas and constraints from recipes to inform function calls.
-- Complete the request using the available functions.
-- Use your existing context as much as possible to avoid duplicate work.
-
-If a function call returns an error, stop immediately, display the error, and suggest
-possible solutions.
-"""
-
-
-def ex_user(*parts: Part) -> Content:
-    return Content(role="user", parts=list(parts))
-
-
-def ex_model(*parts: Part) -> Content:
-    return Content(role="model", parts=list(parts))
-
-
-def ex_text(text: str) -> Part:
-    return Part.from_text(text)
-
-
-def ex_call(fn: str, **kwargs) -> Part:
-    return Part.from_dict(
-        {
-            "function_call": {
-                "name": fn,
-                "args": kwargs,
-            }
-        }
-    )
-
-
-def ex_resp(fn: str, result: Any) -> Part:
-    return Part.from_dict(
-        {"function_response": {"name": fn, "response": {"content": {"result": result}}}}
-    )
-
-
-# We seed the chat history with these examples, because it allows us to structure them
-# exactly as they would look in the history. This appears to work well as way of merging
-# few-shot prompting with function calling.
-init_shots = [
-    # Initial request/response with find_recipes call.
-    ex_user(
-        ex_text(
-            """
-            The following are some examples of expected requests and responses.
-            <EXAMPLE>
-            I'm an account rep focusing on retention for SaaS customers.
-            Tell me which customers I should reach out to this week, and explain why I should choose them.
-            """
-        )
-    ),
-    ex_model(
-        ex_text(
-            "I will use `find_recipes` to find the best way to identify customers at risk of churn."
-        ),
-        ex_call("find_recipes", number=5, goal="Identify customers at risk of churn"),
-        ex_text("</EXAMPLE>"),
-    ),
-    ex_user(
-        ex_text("<EXAMPLE>"),
-        ex_resp(
-            "find_recipes",
-            [
-                "these would be recipes",
-                "that you should use to inform your plan",
-            ],
-        ),
-    ),
-    ex_model(
-        Part.from_text(
-            """
-            Based on these recipes, I will do the following:
-            - Things I will do in my plan
-            - to satisfy the request.
-            </EXAMPLE>
-            """
-        ),
-    ),
-]
+from agency.minions import Minion, MinionDecl
+from agency.router import Router
+from agency.types import Tool, ToolCall, ToolContext, ToolResult
+from agency.utils import trunc
 
 
 @dataclass
-class Thought:
-    typ: Literal["message", "tool"]
-    content: str
+class Frame:
+    tool: Tool
+    tool_id: str
+    args: Dict[str, Any]
+    call_id: str
+
+    result_tool_id: Optional[str] = field(default=None)
+    result_call_id: Optional[str] = field(default=None)
+    result_args: Optional[Dict[str, Any]] = field(default=None)
+
+    def respond(self, result_tool_id: str, result_call_id: str, result: Dict[str, Any]):
+        self.result_tool_id = result_tool_id
+        self.result_call_id = result_call_id
+        self.result_args = result
 
 
 class Agency:
-    _chat: ChatSession
-    _log: List[List[str]]
-    _stack: List[Minion]
+    _router: Router
+    _stack: List[Frame]
+    _lair: Dict[str, MinionDecl]
+    _toolbox: Dict[str, Tool]
 
-    def __init__(
-        self,
-        model: GenerativeModel,
-        minion: Minion,
-        history: Optional[List[Content]] = None,
-    ):
-        if history == None:
-            history = init_shots
+    def __init__(self, tools: List[Tool], minions: List[MinionDecl]):
+        self._router = Router()
+        self._stack = []
+        self._lair = {min.id: min for min in minions}
+        self._toolbox = {tool.decl.id: tool for tool in tools}
 
-        self._stack = [minion]
-        self._chat = model.start_chat(response_validation=False, history=history)
-        self._log = []
+    def ask(self, tool_id: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a tool request, handling nested tool calls via the stack.
 
-    @property
-    def history(self) -> List[Content]:
-        return self._chat.history
+        The tool stack works as follows:
+        - Each tool.dispatch() returns a ToolResponse
+        - If response.call_id is None: tool is done, return result to previous tool
+        - If response.call_id is set: push that tool onto stack and continue
 
-    def top_minion(self) -> Minion:
-        return self._stack[-1]
+        Args:
+            tool_id: ID of the tool to execute
+            args: Arguments to pass to the tool
 
-    def ask(self, question: str) -> Generator[str, None, None]:
-        self.top_minion().new_question(question)
+        Returns:
+            The final result after all nested tool calls complete
 
-        while not self.top_minion().is_finished():
-            for thought in self.top_minion().think(self._chat):
-                match thought.typ:
-                    case "message":
-                        yield thought.content
-                    case "tool":
-                        yield f"(calling {thought.content})"
+        Raises:
+            Exception: If tool_id is not found
+        """
+        response: Optional[ToolResult] = None
+        self.push_tool(tool_id, args, "")
+        while len(self._stack) > 0:
+            frame = self._stack[-1]
+            args = frame.result_args if frame.result_args else frame.args
+            print(
+                f"--> invoking {frame.tool_id} <- {frame.result_tool_id}({frame.result_call_id})\n{trunc(str(args), 120)}"
+            )
+            response = frame.tool.invoke(
+                ToolCall(
+                    context=ToolContext(router=self._router),
+                    args=args,
+                    result_tool_id=frame.result_tool_id,
+                    result_call_id=frame.result_call_id,
+                )
+            )
 
-
-class Minion:
-    _inputs: List[Part]
-    _toolbox: ToolBox
-
-    def __init__(self, tools: List[Tool]):
-        self._toolbox = ToolBox(tools)
-        self._inputs = []
-
-    def think(self, chat: ChatSession) -> Generator[Thought, None, None]:
-        new_inputs = []
-        outputs = self._send(chat, self._inputs)
-        for part in outputs:
-            if part_is_text(part):
-                # Sometimes we get whitespace-only.
-                if part.text.strip() != "":
-                    yield Thought("message", part.text)
+            if response.call_tool_id is None:
+                # The Tool is done; pop it off the stack and pass the response to the underlying frame.
+                last_frame = self._stack.pop()
+                if len(self._stack) > 0:
+                    self._stack[-1].respond(
+                        last_frame.tool_id, last_frame.call_id, response.args
+                    )
             else:
-                call = part.function_call
-                rsp_part = self._toolbox.dispatch(call)
-                rsp = rsp_part.function_response
-                new_inputs.append(rsp_part)
-                yield Thought("tool", print_tool(call, rsp))
+                # It wants to call another tool; push it on the stack.
+                self.push_tool(
+                    response.call_tool_id, response.args, response.call_id or ""
+                )
 
-        self._inputs = new_inputs
+        return response.args if response else {}
 
-    def is_finished(self) -> bool:
-        return len(self._inputs) == 0
-
-    def new_question(self, question: str):
-        self._inputs.append(Part.from_text(question))
-
-    def _send(self, chat: ChatSession, parts: List[Part]) -> List[Part]:
-        rsp = chat.send_message(
-            cast(List, parts),
-            tools=[self._toolbox.lang_tools],
-            generation_config={"temperature": 0},
+    def push_tool(self, tool_id: str, args: Dict[str, Any], call_id: str):
+        """Push a tool onto the stack by its ID."""
+        self._stack.append(
+            Frame(
+                tool=self.tool_by_id(tool_id),
+                tool_id=tool_id,
+                args=args,
+                call_id=call_id,
+            )
         )
 
-        if isinstance(rsp, Iterable):
-            raise Exception("streaming messages not yet supported")
-
-        cand = rsp.candidates[0]
-        return cand.content.parts
+    def tool_by_id(self, tool_id: str) -> Tool:
+        if tool_id in self._toolbox:
+            return self._toolbox[tool_id]
+        if tool_id in self._lair:
+            min_decl = self._lair[tool_id]
+            min_tools = [self.tool_by_id(tool_decl.id) for tool_decl in min_decl.tools]
+            return Minion(min_decl, min_tools)
+        raise Exception(f"no such tool: {tool_id}")
