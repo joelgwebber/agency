@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from jinja2 import Environment
 
-from agency.router import Message, Part, TextPart, ToolDesc
+from agency.models import Message, Part, TextPart, ToolDesc
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 
 

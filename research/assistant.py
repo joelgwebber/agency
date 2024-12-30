@@ -8,14 +8,14 @@ from agency.minion import MinionDecl
 from agency.schema import schema, schema_for
 from agency.tools.browse import Browse
 from agency.tools.docstore import Docstore
-from agency.tools.feedback import FeedbackStore, GetFeedback, SubmitFeedback
+from agency.tools.feedback import GetFeedback, LogStore, SubmitFeedback
 from agency.tools.notebook import LookupNotes, RecordNote, RemoveNote, UpdateNote
 from agency.tools.search import Search
 from agency.ui import AgencyUI
 
 tool_name = "research"
 dbclient = chromadb.PersistentClient(os.path.join(tool_name, "chroma"))
-feedback = FeedbackStore(dbclient, tool_name, "feedback")
+feedback = LogStore(dbclient, tool_name, "feedback")
 notebook = Docstore(dbclient, tool_name, "notebook")
 
 

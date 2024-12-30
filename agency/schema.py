@@ -5,7 +5,7 @@ from enum import Enum
 from inspect import isclass
 from typing import Any, Callable, Dict, Iterable, List, Optional, cast, get_type_hints
 
-from agency.router import OpenAPISchema
+from agency.models import OpenAPISchema
 from agency.utils import timestamp
 
 SCHEMA_KEY = "_schema"

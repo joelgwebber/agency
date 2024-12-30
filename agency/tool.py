@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Protocol
 
-from agency.router import FunctionDesc, Router
+from agency.models import FunctionDesc, Router
 from agency.schema import Schema
 
 

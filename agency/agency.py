@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from agency.minion import Minion, MinionDecl
-from agency.router import Router
+from agency.models import Router
 from agency.tool import Tool, ToolCall, ToolContext, ToolResult
 from agency.utils import trunc
 
