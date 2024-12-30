@@ -4,9 +4,9 @@ import chromadb
 import chromadb.api
 
 from agency.embedding import embed_text
+from agency.tool import Tool, ToolCall, ToolResult
 from agency.tools.annotations import prop, schema, schema_for
 from agency.tools.tools import ToolDecl, parse_val
-from agency.types import Tool, ToolCall, ToolResult
 from agency.utils import timestamp
 
 

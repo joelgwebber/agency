@@ -4,9 +4,9 @@ from typing import Dict, List, Optional, Union
 
 import requests
 
+from agency.tool import Tool, ToolCall, ToolResult
 from agency.tools.annotations import prop, schema, schema_for
 from agency.tools.tools import ToolDecl, parse_val
-from agency.types import Tool, ToolCall, ToolResult
 
 # Just use Tavily for now.
 _TAVILY_API_URL = "https://api.tavily.com"

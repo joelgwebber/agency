@@ -105,7 +105,8 @@ class Schema:
 
 @dataclass
 class ToolDecl:
-    """TODO: doc"""
+    """Declaration for a tool that can be used by a language model (via a Minion).
+    Their ids must be unique within the context of a single Minion."""
 
     id: str
     desc: str

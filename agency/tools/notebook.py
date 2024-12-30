@@ -1,13 +1,15 @@
+"""Tools for recording notes for later consultation.
+
+The notes are stored in a vector database with computed embeddings for later retrieval.
+"""
+
 from dataclasses import dataclass
 from typing import Dict
 
+from agency.tool import Tool, ToolCall, ToolResult
 from agency.tools.annotations import prop, schema, schema_for
 from agency.tools.docstore import Docstore
 from agency.tools.tools import ToolDecl, parse_val
-from agency.types import Tool, ToolCall, ToolResult
-
-# Tools for recording notes for later consultation.
-# The notes are stored in a vector database with computed embeddings for later retrieval.
 
 
 @dataclass

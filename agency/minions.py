@@ -6,12 +6,15 @@ from typing import Any, Dict, List, Optional, Union
 from jinja2 import Environment
 
 from agency.router import Message, Part, TextPart, ToolDesc
+from agency.tool import Tool, ToolCall, ToolResult
 from agency.tools.tools import ToolDecl
-from agency.types import Tool, ToolCall, ToolResult
 
 
 @dataclass
 class MinionDecl(ToolDecl):
+    """Extension of a tool declaration to be used with minions, giving them a jinja template and list of available
+    tools they can use."""
+
     template: str
     tools: List[ToolDecl]
 

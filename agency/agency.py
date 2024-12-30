@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from agency.minions import Minion, MinionDecl
 from agency.router import Router
-from agency.types import Tool, ToolCall, ToolContext, ToolResult
+from agency.tool import Tool, ToolCall, ToolContext, ToolResult
 from agency.utils import trunc
 
 

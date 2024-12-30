@@ -10,7 +10,9 @@ from agency.utils import timestamp
 
 
 def schema(cls_desc: str = ""):
-    """TODO: doc"""
+    """A class decorator that can be used on a dataclass, giving it an OpenAPI schema (accessible via schema_for(cls),
+    and allowing it to be parsed with tools.parse_val(). This effectively extends @dataclass.
+    """
 
     def decorator(_cls) -> type:
         # Schema objects are also dataclasses.
@@ -25,15 +27,15 @@ def schema(cls_desc: str = ""):
     return decorator
 
 
-# TODO: Figure out how to fix field()'s type checker magic here.
-# Returning the correct Field[T] breaks callers.
+# TODO: Properly typing the return type causes all kinds of problems at call sites. Figure out why.
 def prop(
     desc: str,
     *,
     default: Any = None,
     default_factory: Optional[Callable] = None,
 ) -> Any:
-    """TODO: doc"""
+    """A initializer equivalent to dataclasses.Field, that gives the field a description to be used in its schema.
+    This should only be used on fields with the @schema() annotation."""
 
     if default_factory:
         return field(default_factory=default_factory, metadata={"desc": desc})
@@ -43,7 +45,7 @@ def prop(
 
 
 def schema_for(cls: type) -> Schema:
-    """TODO: doc"""
+    """Gets the OpenAPI schema for a class with the @schema annotation."""
 
     if not hasattr(cls, SCHEMA_KEY):
         raise Exception(f"{cls} requires the @schema annotation")

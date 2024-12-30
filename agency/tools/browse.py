@@ -5,9 +5,9 @@ from urllib.parse import urljoin
 from playwright.sync_api import Response, sync_playwright
 from unstructured.partition.auto import partition
 
+from agency.tool import Tool, ToolCall, ToolResult
 from agency.tools.annotations import prop, schema, schema_for
 from agency.tools.tools import ToolDecl, parse_val
-from agency.types import Tool, ToolCall, ToolResult
 
 
 # NOTE: The unstructured partition() function is skipping some elements for HTML,
