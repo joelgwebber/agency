@@ -1,6 +1,12 @@
+# Seemingly unused, but imported for the side-effect of using readline()
+# for input on Unix-like systems.
+import readline
+
 from rich.console import Console
 
 from agency.agency import Agency
+
+readline.redisplay
 
 
 class AgencyUI:

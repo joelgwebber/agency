@@ -4,8 +4,8 @@ import chromadb
 
 from agency import Agency
 from agency.keys import TAVILY_API_KEY
-from agency.minions import MinionDecl
-from agency.tools.annotations import schema, schema_for
+from agency.minion import MinionDecl
+from agency.schema import schema, schema_for
 from agency.tools.browse import Browse
 from agency.tools.docstore import Docstore
 from agency.tools.feedback import GetFeedback, SubmitFeedback

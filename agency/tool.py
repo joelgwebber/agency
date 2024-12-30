@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Protocol
 
-from agency.router import Router
-from agency.tools.tools import ToolDecl
+from agency.router import FunctionDesc, Router
+from agency.schema import Schema
 
 
 @dataclass
@@ -55,6 +55,28 @@ class ToolResult:
     args: Dict[str, Any]
     call_tool_id: Optional[str] = field(default=None)
     call_id: Optional[str] = field(default=None)
+
+
+@dataclass
+class ToolDecl:
+    """Declaration for a tool that can be used by a language model (via a Minion).
+    Their ids must be unique within the context of a single Minion."""
+
+    id: str
+    desc: str
+    params: Schema
+
+    def __init__(self, name: str, desc: str, params: Schema):
+        self.id = name
+        self.desc = desc
+        self.params = params
+
+    def to_func(self) -> FunctionDesc:
+        return {
+            "name": self.id,
+            "description": self.desc,
+            "parameters": self.params.to_openapi(),
+        }
 
 
 class Tool(Protocol):

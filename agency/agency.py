@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from agency.minions import Minion, MinionDecl
+from agency.minion import Minion, MinionDecl
 from agency.router import Router
-from agency.types import Tool, ToolCall, ToolContext, ToolResult
+from agency.tool import Tool, ToolCall, ToolContext, ToolResult
 from agency.utils import trunc
 
 
