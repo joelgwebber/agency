@@ -1,7 +1,7 @@
 import os
 from glob import glob
 from hashlib import md5
-from typing import Dict, List, Optional, Tuple, TypedDict
+from typing import Dict, List, Tuple, TypedDict
 
 import chromadb.api
 from chromadb import Metadata
@@ -18,7 +18,7 @@ class Doc(TypedDict):
 
 class Docstore:
     _coll: chromadb.Collection
-    _work_dir: Optional[str]
+    _work_dir: str
 
     def __init__(
         self,

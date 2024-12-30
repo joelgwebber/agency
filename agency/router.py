@@ -6,11 +6,15 @@ from typing import Any, Dict, List, Literal, NotRequired, TypedDict, Union
 import requests
 
 from agency.keys import OPENROUTER_API_KEY
+from agency.utils import timestamp
 
 # Try to use this to keep it from dumping raw text or multiple json responses.
 system_prompt: Message = {
     "role": "system",
-    "content": """Always return precisely one correctly-structured json output; never raw text.""",
+    "content": f"""
+    The current time is {timestamp.now()}.
+    Always return precisely one correctly-structured json output; never raw text.
+    """,
 }
 
 

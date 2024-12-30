@@ -8,15 +8,15 @@ from agency.minion import MinionDecl
 from agency.schema import schema, schema_for
 from agency.tools.browse import Browse
 from agency.tools.docstore import Docstore
-from agency.tools.feedback import GetFeedback, SubmitFeedback
+from agency.tools.feedback import GetFeedback, LogStore, SubmitFeedback
 from agency.tools.notebook import LookupNotes, RecordNote, RemoveNote, UpdateNote
 from agency.tools.search import Search
 from agency.ui import AgencyUI
 
 tool_name = "world"
 dbclient = chromadb.PersistentClient(os.path.join(tool_name, "chroma"))
-fb_coll = dbclient.get_or_create_collection("feedback")
 knowledge = Docstore(dbclient, tool_name, "knowledge")
+feedback = LogStore(dbclient, tool_name, "feedback")
 
 
 @schema()
@@ -39,6 +39,8 @@ WorldBuilder = MinionDecl(
         UpdateNote.decl,
         RemoveNote.decl,
         LookupNotes.decl,
+        SubmitFeedback.decl,
+        GetFeedback.decl,
     ],
 )
 
@@ -49,8 +51,8 @@ tools = [
     UpdateNote(knowledge),
     RemoveNote(knowledge),
     LookupNotes(knowledge),
-    SubmitFeedback(fb_coll),
-    GetFeedback(fb_coll),
+    SubmitFeedback(feedback),
+    GetFeedback(feedback),
 ]
 
 agency = Agency(tools, [WorldBuilder])

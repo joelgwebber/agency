@@ -1,14 +1,12 @@
-from typing import List
+from dataclasses import dataclass
 
-import chromadb
-import chromadb.api
-
-from agency.embedding import embed_text
 from agency.schema import parse_val, prop, schema, schema_for
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
+from agency.tools.logstore import LogStore
 from agency.utils import timestamp
 
 
+@dataclass
 class SubmitFeedback(Tool):
     @schema()
     class Args:
@@ -24,24 +22,15 @@ class SubmitFeedback(Tool):
         schema_for(Args),
     )
 
-    _coll: chromadb.Collection
-
-    def __init__(self, coll: chromadb.Collection):
-        self._coll = coll
+    _store: LogStore
 
     def invoke(self, req: ToolCall) -> ToolResult:
         args = parse_val(req.args, SubmitFeedback.decl.params)
-        when = timestamp.now().timestamp()
-        doc = f"Expected:\n{args.expectation}\nContext:\n{args.context}"
-        self._coll.add(
-            ids=str(when),
-            documents=doc,
-            embeddings=embed_text(doc).tolist(),
-            metadatas={"when": when},
-        )
+        self._store.append(f"""Expected: {args.expectation}\nContext: {args.context}""")
         return ToolResult({})
 
 
+@dataclass
 class GetFeedback(Tool):
     @schema()
     class Args:
@@ -55,29 +44,9 @@ class GetFeedback(Tool):
         schema_for(Args),
     )
 
-    _coll: chromadb.Collection
-
-    def __init__(self, coll: chromadb.Collection):
-        self._coll = coll
+    _store: LogStore
 
     def invoke(self, req: ToolCall) -> ToolResult:
         args = parse_val(req.args, GetFeedback.decl.params)
-        rsp = self._coll.query(
-            query_embeddings=embed_text(args.query).tolist(),
-            where={
-                "$and": [
-                    {"when": {"$gte": args.begin.timestamp()}},
-                    {"when": {"$lt": args.end.timestamp()}},
-                ]
-            },
-        )
-
-        result: List[List[str]] = []
-        if rsp["documents"] is not None and rsp["metadatas"] is not None:
-            docs = rsp["documents"][0]
-            metas = rsp["metadatas"][0]
-            for i in range(0, len(docs)):
-                when = timestamp.fromtimestamp(float(metas[i]["when"]))
-                result.append([when.isoformat(), docs[i]])
-
+        result = self._store.query(args.query, args.begin, args.end)
         return ToolResult({"feedback": result})
