@@ -1,11 +1,11 @@
 import json
 import traceback
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment
 
-from agency.models import Message, Part, TextPart, ToolDesc
+from agency.models import Message, Role, Function
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 
 
@@ -21,19 +21,13 @@ class MinionDecl(ToolDecl):
 class Minion(Tool):
     decl: ToolDecl
     _history: List[Message]
-    _tools: List[ToolDesc]
+    _functions: List[Function]
 
     def __init__(self, decl: MinionDecl, tools: List[Tool]):
         self.decl = decl
         self._history = []
         self._template = Environment().from_string(decl.template)
-        self._tools = [
-            {
-                "type": "function",
-                "function": tool.decl.to_func(),
-            }
-            for tool in tools
-        ]
+        self._functions = [tool.decl.to_func() for tool in tools]
 
     def invoke(self, req: ToolCall) -> ToolResult:
         try:
@@ -41,41 +35,42 @@ class Minion(Tool):
             if not req.result_tool_id:
                 # Initial request to this tool.
                 prompt = self._template.render(req.args)
-                message = Message(
-                    role="user", content=[TextPart(type="text", text=prompt)]
-                )
+                message = Message(role=Role.USER, content=prompt)
             else:
                 # Getting a response from a tool invocation.
                 if not req.result_call_id:
                     raise Exception("expected call_id for tool request")
                 message = Message(
-                    role="tool",
-                    name=req.result_tool_id,
-                    tool_call_id=req.result_call_id,
+                    role=Role.TOOL,
                     content=json.dumps(req.args),
+                    tool_call_id=req.result_call_id
                 )
 
             # Append to history and complete with the underlying model.
             self._history.append(message)
-            completion = req.context.router.send(self._history, self._tools)
+            completion = req.context.router.send(self._history, self._functions)
             self._history.append(completion)
 
             # Handle any tool calls requested by the model.
-            if "tool_calls" in completion:
-                tool_calls = completion["tool_calls"]
+            if completion.tool_calls:
+                tool_calls = completion.tool_calls
                 if len(tool_calls) > 1:
                     raise Exception(
                         f"Only one tool call per completion supported: {completion}"
                     )
                 func = tool_calls[0]["function"]
                 id = tool_calls[0]["id"]
+                # Handle arguments that may be either JSON string or dict
+                args = func["arguments"]
+                if isinstance(args, str):
+                    args = json.loads(args)
                 return ToolResult(
-                    args=json.loads(func["arguments"]),
+                    args=args,
                     call_tool_id=func["name"],
                     call_id=id,
                 )
 
-            response_args = _parse_content(completion["content"])
+            response_args = _parse_content(completion.content)
             return ToolResult(response_args)
 
         except Exception as e:
@@ -85,42 +80,25 @@ class Minion(Tool):
             return ToolResult({"error": msg})
 
 
-def _parse_content(content: Union[str, List[Part]]) -> Dict[str, Any]:
-    """Parse content into a dictionary, handling both string and Part list inputs.
+def _parse_content(content: Optional[str]) -> Dict[str, Any]:
+    """Parse content into a dictionary from JSON string.
 
     Args:
-        content: Either a JSON string or a list of content parts
+        content: JSON string to parse
 
     Returns:
         Parsed dictionary from the JSON content
 
     Raises:
-        Exception: If no valid JSON is found or multiple JSON objects are found
+        Exception: If no valid JSON is found
     """
-    valid_jsons = []
+    if not content:
+        raise Exception("No content to parse")
 
-    # Handle direct string input
-    if isinstance(content, str):
-        result = _try_parse_json(content)
-        if result is None:
-            raise Exception("No valid JSON dictionary found")
-        return result
-
-    # Handle list of parts
-    for part in content:
-        if part["type"] == "text":
-            result = _try_parse_json(part["text"].strip())
-            if result is not None:
-                valid_jsons.append(result)
-
-    if len(valid_jsons) == 0:
-        raise Exception("No valid JSON dictionary found in any content parts")
-    if len(valid_jsons) > 1:
-        raise Exception(
-            f"Found multiple ({len(valid_jsons)}) JSON objects: {valid_jsons}"
-        )
-
-    return valid_jsons[0]
+    result = _try_parse_json(content)
+    if result is None:
+        raise Exception("No valid JSON dictionary found")
+    return result
 
 
 def _try_parse_json(text: str) -> Optional[Dict[str, Any]]:

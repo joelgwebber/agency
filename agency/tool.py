@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Protocol
 
-from agency.models import FunctionDesc, Router
+from agency.models import Function, Router
 from agency.schema import Schema
 
 
@@ -71,12 +71,12 @@ class ToolDecl:
         self.desc = desc
         self.params = params
 
-    def to_func(self) -> FunctionDesc:
-        return {
-            "name": self.id,
-            "description": self.desc,
-            "parameters": self.params.to_openapi(),
-        }
+    def to_func(self) -> Function:
+        return Function(
+            name=self.id,
+            description=self.desc,
+            parameters=self.params.to_openapi(),
+        )
 
 
 class Tool(Protocol):
