@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Protocol
 
-from agency.models import Function, Router
+from agency.models import Function
 from agency.schema import Schema
 
 
@@ -11,12 +11,9 @@ class ToolContext:
 
     This context is provided to every tool invocation and contains resources
     that are shared across the entire tool execution chain.
-
-    Attributes:
-        router: The router instance used for invoking language models
     """
 
-    router: Router
+    pass
 
 
 @dataclass
@@ -27,16 +24,19 @@ class ToolCall:
     including the execution context and any arguments.
 
     Attributes:
-        context: The shared context for this tool execution
-        args: Dictionary of arguments to pass to the tool
+        id: Unique identifier for this tool call
+        name: Name of the tool to call
+        arguments: Dictionary of arguments to pass to the tool
+        context: The shared context for this tool execution (optional)
         result_tool_id: ID of the tool that produced this call's input
         result_call_id: ID of the specific call that produced this call's input
     """
 
-    context: ToolContext
-    args: Dict[str, Any]
-    result_tool_id: Optional[str] = field(default=None)
-    result_call_id: Optional[str] = field(default=None)
+    name: str
+    arguments: Dict[str, Any]
+    context: Optional[ToolContext] = None
+    result_tool_id: Optional[str] = None
+    result_call_id: Optional[str] = None
 
 
 @dataclass

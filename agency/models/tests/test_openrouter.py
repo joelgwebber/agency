@@ -22,6 +22,7 @@ def test_complete_content(llm):
 
         assert response.content == '{"result": "test response"}'
         assert response.function is None
+        assert response.role == Role.ASSISTANT
 
         # Verify API call
         mock_post.assert_called_once()
@@ -37,6 +38,7 @@ def test_complete_tool_call(llm):
             "choices": [
                 {
                     "message": {
+                        "content": "",
                         "tool_calls": [
                             {
                                 "id": "call-123",
@@ -44,8 +46,9 @@ def test_complete_tool_call(llm):
                                     "name": "test_function",
                                     "arguments": '{"arg": "value"}',
                                 },
+                                "type": "function",
                             }
-                        ]
+                        ],
                     }
                 }
             ]
@@ -61,9 +64,9 @@ def test_complete_tool_call(llm):
         ]
         response = llm.complete(messages, functions)
 
-        assert response.content is None
+        assert response.content == ""
         assert response.function == FunctionCall(
-            name="test_function", args={"arg": "value"}, call_id="call-123"
+            id="call-123", name="test_function", arguments={"arg": "value"}
         )
 
         # Verify API call

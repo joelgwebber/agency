@@ -10,9 +10,8 @@ from agency.models.llm import (
     LLM,
     Function,
     FunctionCall,
-    FunctionResult,
     Message,
-    Response,
+    Role,
 )
 
 
@@ -26,8 +25,7 @@ class OpenRouterLLM(LLM):
         self,
         messages: List[Message],
         functions: Optional[List[Function]] = None,
-        function_result: Optional[FunctionResult] = None,
-    ) -> Response:
+    ) -> Message:
         # Convert our messages to OpenRouter format
         or_messages = []
 
@@ -45,16 +43,6 @@ class OpenRouterLLM(LLM):
         for msg in messages:
             or_messages.append({"role": msg.role.value, "content": msg.content})
 
-        # Add function result if provided
-        if function_result:
-            or_messages.append(
-                {
-                    "role": "tool",
-                    "content": json.dumps(function_result.args),
-                    "name": function_result.call_id,
-                    "tool_call_id": function_result.call_id,
-                }
-            )
 
         # Convert our functions to OpenRouter format
         or_functions = [
@@ -91,19 +79,19 @@ class OpenRouterLLM(LLM):
         # Extract the completion
         completion = rsp["choices"][0]["message"]
 
-        # Handle function calls
+        # Convert completion to Message
+        msg = Message(role=Role.ASSISTANT, content=completion.get("content", ""))
+        
+        # Add function call if present
         if "tool_calls" in completion:
             tool_calls = completion["tool_calls"]
             if len(tool_calls) > 1:
                 raise Exception(f"Expected at most 1 tool call, got {len(tool_calls)}")
             tool_call = tool_calls[0]
-            return Response(
-                function=FunctionCall(
-                    name=tool_call["function"]["name"],
-                    args=json.loads(tool_call["function"]["arguments"]),
-                    call_id=tool_call["id"],
-                )
+            msg.function = FunctionCall(
+                id=tool_call["id"],
+                name=tool_call["function"]["name"],
+                arguments=json.loads(tool_call["function"]["arguments"])
             )
-
-        # Handle content
-        return Response(content=completion["content"])
+            
+        return msg

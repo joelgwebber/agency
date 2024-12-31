@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment
 
-from agency.models import Function, Message, Role
+from agency.models.llm import Function, Message, Role
+from agency.models.openrouter import OpenRouterLLM
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 
 
@@ -23,47 +24,46 @@ class Minion(Tool):
     _history: List[Message]
     _functions: List[Function]
 
-    def __init__(self, decl: MinionDecl, tools: List[Tool]):
+    def __init__(
+        self, decl: MinionDecl, tools: List[Tool], model: str = "openai/gpt-3.5-turbo"
+    ):
         self.decl = decl
         self._history = []
         self._template = Environment().from_string(decl.template)
         self._functions = [tool.decl.to_func() for tool in tools]
+        self._llm = OpenRouterLLM(model)
 
     def invoke(self, req: ToolCall) -> ToolResult:
         try:
             message: Message
             if not req.result_tool_id:
-                # Initial request to this tool.
-                prompt = self._template.render(req.args)
+                # Initial request to this tool
+                prompt = self._template.render(req.arguments)
                 message = Message(role=Role.USER, content=prompt)
             else:
-                # Getting a response from a tool invocation.
-                if not req.result_call_id:
-                    raise Exception("expected call_id for tool request")
+                # Getting a response from a previous tool
                 message = Message(
                     role=Role.TOOL,
-                    content=json.dumps(req.args),
-                    tool_call_id=req.result_call_id,
+                    content=json.dumps(req.result_call_id),
                 )
 
-            # Append to history and complete with the underlying model.
+            # Append to history and complete with the LLM
             self._history.append(message)
-            completion = req.context.router.send(self._history, self._functions)
-            self._history.append(completion)
+            response = self._llm.complete(self._history, self._functions)
 
-            # Handle tool call requested by the model.
-            if completion.tool_call:
-                # Handle arguments that may be either JSON string or dict
-                args = completion.tool_call.arguments
-                if isinstance(args, str):
-                    args = json.loads(args)
+            # Convert response to appropriate message type and append to history
+            # Add response to history
+            self._history.append(response)
+
+            # Convert to tool result
+            if response.function:
                 return ToolResult(
-                    args=args,
-                    call_tool_id=completion.tool_call.name,
-                    call_id=completion.tool_call.id,
+                    args=response.function.arguments,
+                    call_tool_id=response.function.name,
+                    call_id=response.function.id,
                 )
 
-            response_args = _parse_content(completion.content)
+            response_args = _parse_content(response.content)
             return ToolResult(response_args)
 
         except Exception as e:
