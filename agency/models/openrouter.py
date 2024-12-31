@@ -93,7 +93,10 @@ class OpenRouterLLM(LLM):
 
         # Handle function calls
         if "tool_calls" in completion:
-            tool_call = completion["tool_calls"][0]
+            tool_calls = completion["tool_calls"]
+            if len(tool_calls) > 1:
+                raise Exception(f"Expected at most 1 tool call, got {len(tool_calls)}")
+            tool_call = tool_calls[0]
             return Response(
                 function=FunctionCall(
                     name=tool_call["function"]["name"],
