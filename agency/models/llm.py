@@ -17,12 +17,21 @@ class Role(Enum):
 
 
 @dataclass
+class ToolCall:
+    """A tool/function call from the LLM."""
+
+    id: str
+    name: str
+    arguments: Dict[str, Any]
+
+
+@dataclass
 class Message:
     """A message in the LLM conversation."""
 
     role: Role
     content: str
-    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call: Optional[ToolCall] = None
     tool_call_id: Optional[str] = None
 
 

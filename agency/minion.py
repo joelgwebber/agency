@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment
 
-from agency.models import Message, Role, Function
+from agency.models import Function, Message, Role
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 
 
@@ -43,7 +43,7 @@ class Minion(Tool):
                 message = Message(
                     role=Role.TOOL,
                     content=json.dumps(req.args),
-                    tool_call_id=req.result_call_id
+                    tool_call_id=req.result_call_id,
                 )
 
             # Append to history and complete with the underlying model.
@@ -51,23 +51,16 @@ class Minion(Tool):
             completion = req.context.router.send(self._history, self._functions)
             self._history.append(completion)
 
-            # Handle any tool calls requested by the model.
-            if completion.tool_calls:
-                tool_calls = completion.tool_calls
-                if len(tool_calls) > 1:
-                    raise Exception(
-                        f"Only one tool call per completion supported: {completion}"
-                    )
-                func = tool_calls[0]["function"]
-                id = tool_calls[0]["id"]
+            # Handle tool call requested by the model.
+            if completion.tool_call:
                 # Handle arguments that may be either JSON string or dict
-                args = func["arguments"]
+                args = completion.tool_call.arguments
                 if isinstance(args, str):
                     args = json.loads(args)
                 return ToolResult(
                     args=args,
-                    call_tool_id=func["name"],
-                    call_id=id,
+                    call_tool_id=completion.tool_call.name,
+                    call_id=completion.tool_call.id,
                 )
 
             response_args = _parse_content(completion.content)

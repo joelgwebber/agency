@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List
 
-from agency.models.llm import LLM, Function, FunctionResult, Message, Role
+from agency.models.llm import LLM, Function, FunctionResult, Message, Role, ToolCall
 from agency.models.openrouter import OpenRouterLLM
 
 
@@ -45,16 +45,11 @@ class Router:
             return Message(
                 role=Role.ASSISTANT,
                 content="",
-                tool_calls=[
-                    {
-                        "id": response.function.call_id,
-                        "type": "function",
-                        "function": {
-                            "name": response.function.name,
-                            "arguments": response.function.args,
-                        },
-                    }
-                ],
+                tool_call=ToolCall(
+                    id=response.function.call_id,
+                    name=response.function.name,
+                    arguments=response.function.args,
+                ),
             )
         else:
             return Message(role=Role.ASSISTANT, content=response.content or "")
