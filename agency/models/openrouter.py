@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 import json
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
 from agency.keys import OPENROUTER_API_KEY
-from agency.models.llm import (
-    LLM,
-    Function,
-    FunctionCall,
-    Message,
-    Role,
-)
+from agency.models.llm import LLM, Function, FunctionCall, Message, Role
 
 
 class OpenRouterLLM(LLM):
@@ -30,7 +24,7 @@ class OpenRouterLLM(LLM):
         or_messages = []
 
         # Always start with system message requiring JSON
-        # This is particularly important because OpenRouter won't let you request json outpu, without
+        # This is particularly important because OpenRouter won't let you request json output, without
         # the word 'json' appearing somewhere in the prompt. Feels like a hack.
         or_messages.append(
             {
@@ -39,23 +33,52 @@ class OpenRouterLLM(LLM):
             }
         )
 
-        # Convert our messages
+        # Convert our messages, ensuring content is never null
         for msg in messages:
-            or_messages.append({"role": msg.role.value, "content": msg.content})
+            or_message: Dict[str, Any] = {}
+            if msg.role == Role.TOOL and msg.function:
+                # Tool responses need special formatting
+                or_message = {
+                    "role": "tool",
+                    "content": json.dumps(msg.function.arguments),
+                    "tool_call_id": msg.function.id,
+                    "name": msg.function.name,
+                }
+            else:
+                # Regular messages
+                content = msg.content if msg.content is not None else ""
+                or_message = {"role": msg.role.value, "content": content}
 
+                # Add tool_calls for assistant messages with function calls
+                if msg.role == Role.ASSISTANT and msg.function:
+                    tool_call = {
+                        "id": msg.function.id,
+                        "type": "function",
+                        "function": {
+                            "name": msg.function.name,
+                            "arguments": json.dumps(msg.function.arguments),
+                        },
+                    }
+                    or_message["tool_calls"] = [tool_call]
+
+            or_messages.append(or_message)
 
         # Convert our functions to OpenRouter format
-        or_functions = [
-            {
-                "type": "function",
-                "function": {
-                    "name": f.name,
-                    "description": f.description,
-                    "parameters": f.parameters,
-                },
-            }
-            for f in functions
-        ] if functions else None
+        or_functions = (
+            [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": f.name,
+                        "description": f.description,
+                        "parameters": f.parameters,
+                    },
+                }
+                for f in functions
+            ]
+            if functions
+            else None
+        )
 
         # Make the API call
         rsp = requests.post(
@@ -81,7 +104,7 @@ class OpenRouterLLM(LLM):
 
         # Convert completion to Message
         msg = Message(role=Role.ASSISTANT, content=completion.get("content", ""))
-        
+
         # Add function call if present
         if "tool_calls" in completion:
             tool_calls = completion["tool_calls"]
@@ -91,7 +114,7 @@ class OpenRouterLLM(LLM):
             msg.function = FunctionCall(
                 id=tool_call["id"],
                 name=tool_call["function"]["name"],
-                arguments=json.loads(tool_call["function"]["arguments"])
+                arguments=json.loads(tool_call["function"]["arguments"]),
             )
-            
+
         return msg

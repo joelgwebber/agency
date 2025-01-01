@@ -70,7 +70,7 @@ class Agency:
             response = frame.tool.invoke(
                 ToolCall(
                     name=frame.tool_id,
-                    arguments=args,
+                    args=args,
                     context=ToolContext(),
                     result_tool_id=frame.result_tool_id,
                     result_call_id=frame.result_call_id,

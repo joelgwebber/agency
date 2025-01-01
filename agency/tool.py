@@ -33,7 +33,7 @@ class ToolCall:
     """
 
     name: str
-    arguments: Dict[str, Any]
+    args: Dict[str, Any]
     context: Optional[ToolContext] = None
     result_tool_id: Optional[str] = None
     result_call_id: Optional[str] = None

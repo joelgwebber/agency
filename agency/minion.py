@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment
 
-from agency.models.llm import Function, Message, Role
+from agency.models.llm import Function, FunctionCall, Message, Role
 from agency.models.openrouter import OpenRouterLLM
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 
@@ -38,13 +38,19 @@ class Minion(Tool):
             message: Message
             if not req.result_tool_id:
                 # Initial request to this tool
-                prompt = self._template.render(req.arguments)
+                prompt = self._template.render(req.args)
                 message = Message(role=Role.USER, content=prompt)
             else:
                 # Getting a response from a previous tool
+                # For tool results, set the function field and leave content empty
                 message = Message(
                     role=Role.TOOL,
-                    content=json.dumps(req.result_call_id),
+                    content="",
+                    function=FunctionCall(
+                        id=req.result_call_id or "",
+                        name=req.result_tool_id,
+                        arguments=req.args,
+                    ),
                 )
 
             # Append to history and complete with the LLM
