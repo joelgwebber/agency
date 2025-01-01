@@ -66,8 +66,8 @@ class ToolDecl:
     desc: str
     params: Schema
 
-    def __init__(self, name: str, desc: str, params: Schema):
-        self.id = name
+    def __init__(self, id: str, desc: str, params: Schema):
+        self.id = id
         self.desc = desc
         self.params = params
 
