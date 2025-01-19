@@ -7,7 +7,7 @@ import chromadb
 from agency import Agency
 from agency.keys import TAVILY_API_KEY
 from agency.minion import Minion
-from agency.models.openrouter import OpenRouterLLM
+from agency.models.openrouter import OpenRouter
 from agency.schema import schema, schema_for
 from agency.tool import ToolDecl
 from agency.tools.browse import Browse
@@ -21,7 +21,7 @@ tool_name = "research"
 dbclient = chromadb.PersistentClient(os.path.join(tool_name, "chroma"))
 feedback = LogStore(dbclient, tool_name, "feedback")
 notebook = Docstore(dbclient, tool_name, "notebook")
-model = OpenRouterLLM()
+model = OpenRouter()
 
 
 @schema()
@@ -37,7 +37,8 @@ GeneralKnowledge = Minion(
     ),
     model,
     """Answer the following question in general terms, with the goal of creating starting points for further research.
-    Response format: {"answer": "(answer)", "search_terms": ["(term0)", "(term1)", ...]}""",
+    Response format: {"answer": "(answer)", "search_terms": ["(term0)", "(term1)", ...]}:
+    {{ question }}""",
     [],
 )
 

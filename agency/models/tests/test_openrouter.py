@@ -2,13 +2,13 @@ from unittest.mock import patch
 
 import pytest
 
-from agency.models.llm import Function, FunctionCall, Message, Role
-from agency.models.openrouter import OpenRouterLLM
+from agency.models import Function, FunctionCall, Message, Role
+from agency.models.openrouter import OpenRouter
 
 
 @pytest.fixture
 def llm():
-    return OpenRouterLLM("test-model")
+    return OpenRouter("test-model")
 
 
 def test_complete_content(llm):

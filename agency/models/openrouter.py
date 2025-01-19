@@ -1,87 +1,45 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Literal, NotRequired, Optional, TypedDict, Union
+from typing import (
+    Any,
+    Dict,
+    List,
+    Literal,
+    NotRequired,
+    Optional,
+    TypedDict,
+    Union,
+    cast,
+)
 
 import requests
 
 from agency.keys import OPENROUTER_API_KEY
-from agency.models.llm import LLM, Function, FunctionCall, Message, Role
+from agency.models import Function, FunctionCall, Message, Model, Role
 from agency.models.openapi import OpenAPISchema
 
 
-class OpenRouterLLM(LLM):
+class OpenRouter(Model):
     """OpenRouter implementation of the LLM interface."""
 
-    def __init__(self, model: str = "openai/gpt-3.5-turbo"):
-        self.model = model
+    _model_id: str
+
+    def __init__(self, model_id: str = "openai/gpt-3.5-turbo"):
+        self._model_id = model_id
 
     def complete(
         self,
         messages: List[Message],
         functions: Optional[List[Function]] = None,
     ) -> Message:
-        # Convert our messages to OpenRouter format
-        or_messages = []
+        """Complete a conversation using the OpenRouter API."""
+        # Convert messages and functions to OpenRouter format
+        or_messages = self._convert_messages(messages)
+        or_functions = self._convert_functions(functions)
 
-        # Always start with system message requiring JSON
-        # This is particularly important because OpenRouter won't let you request json output, without
-        # the word 'json' appearing somewhere in the prompt. Feels like a hack.
-        or_messages.append(
-            {
-                "role": "system",
-                "content": "Always return precisely one correctly-structured json output; never raw text.",
-            }
-        )
-
-        # Convert our messages, ensuring content is never null
-        for msg in messages:
-            or_message: Dict[str, Any] = {}
-            if msg.role == Role.TOOL and msg.function:
-                # Tool responses need special formatting
-                or_message = {
-                    "role": "tool",
-                    "content": json.dumps(msg.function.arguments),
-                    "tool_call_id": msg.function.id,
-                    "name": msg.function.name,
-                }
-            else:
-                # Regular messages
-                content = msg.content if msg.content is not None else ""
-                or_message = {"role": msg.role.value, "content": content}
-
-                # Add tool_calls for assistant messages with function calls
-                if msg.role == Role.ASSISTANT and msg.function:
-                    tool_call = {
-                        "id": msg.function.id,
-                        "type": "function",
-                        "function": {
-                            "name": msg.function.name,
-                            "arguments": json.dumps(msg.function.arguments),
-                        },
-                    }
-                    or_message["tool_calls"] = [tool_call]
-
-            or_messages.append(or_message)
-
-        # Convert our functions to OpenRouter format
-        or_functions = (
-            [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": f.name,
-                        "description": f.description,
-                        "parameters": f.parameters,
-                    },
-                }
-                for f in functions
-            ]
-            if functions
-            else None
-        )
-
-        # Make the API call
+        # Build and send request
+        request = self._build_request(or_messages, or_functions)
         rsp = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -89,28 +47,122 @@ class OpenRouterLLM(LLM):
                 "HTTP-Referer": "j15r.com",
                 "X-Title": "agency",
             },
-            json={
-                "model": self.model,
-                "response_format": {"type": "json_object"},
-                "messages": or_messages,
-                "tools": or_functions,
-            },
+            json=request,
         ).json()
 
+        # Handle response
+        return self._handle_response(rsp)
+
+    def _convert_message(self, msg: Message) -> ORMessage:
+        """Convert a single Message to OpenRouter format."""
+        if msg.role == Role.TOOL and msg.function:
+            return ORMessage(
+                role="tool",
+                content=json.dumps(msg.function.arguments),
+                tool_call_id=msg.function.id,
+                name=msg.function.name,
+            )
+
+        # Regular messages
+        content = msg.content if msg.content is not None else ""
+        if not isinstance(content, str):
+            raise ValueError(f"Expected string content, got {type(content)}")
+
+        or_message = ORMessage(role=msg.role.value, content=content)
+
+        # Add tool_calls for assistant messages with function calls
+        if msg.role == Role.ASSISTANT and msg.function:
+            tool_call = ORToolCall(
+                id=msg.function.id,
+                type="function",
+                function=ORFunctionCall(
+                    name=msg.function.name, arguments=json.dumps(msg.function.arguments)
+                ),
+            )
+            or_message["tool_calls"] = [tool_call]
+
+        return or_message
+
+    def _convert_messages(self, messages: List[Message]) -> List[ORMessage]:
+        """Convert agency Messages to OpenRouter format."""
+        or_messages: List[ORMessage] = []
+
+        # Add required system message for JSON output
+        or_messages.append(
+            ORMessage(
+                role="system",
+                content="Always return precisely one correctly-structured json output; never raw text.",
+            )
+        )
+
+        # Convert each message
+        for msg in messages:
+            or_message = self._convert_message(msg)
+            or_messages.append(or_message)
+
+        return or_messages
+
+    def _convert_functions(
+        self, functions: Optional[List[Function]]
+    ) -> Optional[List[ORToolDesc]]:
+        """Convert agency Functions to OpenRouter format."""
+        if not functions:
+            return None
+
+        return [
+            ORToolDesc(
+                type="function",
+                function=ORFunctionDesc(
+                    name=f.name, description=f.description, parameters=f.parameters
+                ),
+            )
+            for f in functions
+        ]
+
+    def _build_request(
+        self, messages: List[ORMessage], functions: Optional[List[ORToolDesc]]
+    ) -> ORRequest:
+        """Build the OpenRouter API request."""
+        request = ORRequest(
+            model=self._model_id,
+            response_format=ORResponseFormat(type="json_object"),
+            messages=messages,
+        )
+        if functions:
+            request["tools"] = functions
+        return request
+
+    def _handle_response(self, rsp: Dict) -> Message:
+        """Process OpenRouter API response into an agency Message."""
         if "error" in rsp:
             raise Exception(f"OpenRouter API error: {rsp['error']}")
 
-        # Extract the completion
-        completion = rsp["choices"][0]["message"]
+        # Parse response and extract completion
+        response: ORResponse = cast(ORResponse, rsp)
+        if len(response["choices"]) == 0:
+            raise Exception("OpenRouter provided no response choices")
+        choice = response["choices"][0]
+        if "message" not in choice:
+            raise Exception("OpenRouter provided no message")
 
-        # Convert completion to Message
-        msg = Message(role=Role.ASSISTANT, content=completion.get("content", ""))
+        completion: ORMessage = choice["message"]
+        content = completion["content"]
+
+        # Create base message
+        msg = Message(role=Role.ASSISTANT)
+        if content:
+            if not isinstance(content, str):
+                raise ValueError(
+                    f"Expected string content in response, got {type(content)}"
+                )
+            msg.content = content
 
         # Add function call if present
         if "tool_calls" in completion:
             tool_calls = completion["tool_calls"]
             if len(tool_calls) > 1:
                 raise Exception(f"Expected at most 1 tool call, got {len(tool_calls)}")
+
             tool_call = tool_calls[0]
             msg.function = FunctionCall(
                 id=tool_call["id"],
@@ -121,7 +173,7 @@ class OpenRouterLLM(LLM):
         return msg
 
 
-# TODO: Use these types from the OpenRouter docs explicitly in the dynamic code above.
+# OpenRouter API types:
 
 
 class ORError(TypedDict):
@@ -131,7 +183,7 @@ class ORError(TypedDict):
 # https://openrouter.ai/docs/requests
 class ORRequest(TypedDict):
     # Either messages or prompt is required.
-    messages: NotRequired[List[Message]]
+    messages: NotRequired[List[ORMessage]]
     prompt: NotRequired[str]
 
     model: NotRequired[str]
@@ -189,7 +241,7 @@ class ORChoice(TypedDict):
 
 class ORMessage(TypedDict):
     role: Literal["user", "assistant", "system", "tool"]
-    content: Union[str, List[ORPart]]
+    content: Optional[Union[str, List[ORPart]]]
     name: NotRequired[str]  # For tool results
     tool_call_id: NotRequired[str]  # For tool results
     tool_calls: NotRequired[List[ORToolCall]]  # For tool calls

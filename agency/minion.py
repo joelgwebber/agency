@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from jinja2 import Environment
 from jinja2.environment import Template
 
-from agency.models import LLM, Function, FunctionCall, Message, Role
+from agency.models import Function, FunctionCall, Message, Model, Role
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 
 
@@ -21,13 +21,13 @@ class MinionDecl(ToolDecl):
 
 class Minion(Tool):
     decl: ToolDecl
-    _model: LLM
+    _model: Model
     _template: Template
     _tools: List[Function]
     _history: List[Message]
 
     def __init__(
-        self, decl: ToolDecl, model: LLM, template: str, tools: List[ToolDecl]
+        self, decl: ToolDecl, model: Model, template: str, tools: List[ToolDecl]
     ):
         self.decl = decl
         self._model = model

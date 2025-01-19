@@ -43,7 +43,7 @@ class Function:
     parameters: OpenAPISchema
 
 
-class LLM:
+class Model:
     """Interface for language model implementations."""
 
     def complete(
