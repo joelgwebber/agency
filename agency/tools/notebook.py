@@ -1,4 +1,5 @@
 """Tools for recording notes for later consultation.
+
 The notes are stored in a vector database with computed embeddings for later retrieval.
 """
 

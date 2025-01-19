@@ -19,15 +19,18 @@ class Role(Enum):
 @dataclass
 class FunctionCall:
     """A function call requested by the LLM."""
+
     id: str
     name: str
     arguments: Dict[str, Any]
 
+
 @dataclass
 class Message:
     """A message in the LLM conversation."""
+
     role: Role
-    content: str
+    content: Optional[str] = None
     function: Optional[FunctionCall] = None
 
 
@@ -38,8 +41,6 @@ class Function:
     name: str
     description: str
     parameters: OpenAPISchema
-
-
 
 
 class LLM:

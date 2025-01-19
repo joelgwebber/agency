@@ -3,14 +3,11 @@ import os
 import chromadb
 
 from agency import Agency
-from agency.keys import TAVILY_API_KEY
 from agency.minion import MinionDecl
 from agency.schema import schema, schema_for
-from agency.tools.browse import Browse
 from agency.tools.docstore import Docstore
-from agency.tools.feedback import GetFeedback, LogStore, SubmitFeedback
+from agency.tools.logstore import LogStore
 from agency.tools.notebook import LookupNotes, RecordNote, RemoveNote, UpdateNote
-from agency.tools.search import Search
 from agency.ui import AgencyUI
 
 tool_name = "world"
@@ -39,21 +36,16 @@ WorldBuilder = MinionDecl(
         UpdateNote.decl,
         RemoveNote.decl,
         LookupNotes.decl,
-        SubmitFeedback.decl,
-        GetFeedback.decl,
     ],
 )
 
 tools = [
-    Browse(),
-    Search(TAVILY_API_KEY),
+    WorldBuilder,
     RecordNote(knowledge),
     UpdateNote(knowledge),
     RemoveNote(knowledge),
     LookupNotes(knowledge),
-    SubmitFeedback(feedback),
-    GetFeedback(feedback),
 ]
 
-agency = Agency(tools, [WorldBuilder])
+agency = Agency(tools)
 AgencyUI(agency, WorldBuilder.id).run()

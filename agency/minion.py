@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment
+from jinja2.environment import Template
 
-from agency.models.llm import Function, FunctionCall, Message, Role
-from agency.models.openrouter import OpenRouterLLM
+from agency.models import LLM, Function, FunctionCall, Message, Role
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 
 
@@ -21,56 +21,60 @@ class MinionDecl(ToolDecl):
 
 class Minion(Tool):
     decl: ToolDecl
+    _model: LLM
+    _template: Template
+    _tools: List[Function]
     _history: List[Message]
-    _functions: List[Function]
 
     def __init__(
-        self, decl: MinionDecl, tools: List[Tool], model: str = "openai/gpt-3.5-turbo"
+        self, decl: ToolDecl, model: LLM, template: str, tools: List[ToolDecl]
     ):
         self.decl = decl
+        self._model = model
+        self._template = Environment().from_string(template)
+        self._tools = [decl.to_func() for decl in tools]
         self._history = []
-        self._template = Environment().from_string(decl.template)
-        self._functions = [tool.decl.to_func() for tool in tools]
-        self._llm = OpenRouterLLM(model)
 
     def invoke(self, req: ToolCall) -> ToolResult:
         try:
             message: Message
             if not req.result_tool_id:
-                # Initial request to this tool
+                # Initial request to this tool.
                 prompt = self._template.render(req.args)
                 message = Message(role=Role.USER, content=prompt)
             else:
-                # Getting a response from a previous tool
-                # For tool results, set the function field and leave content empty
+                # Getting a response from a tool invocation.
+                if not req.result_call_id:
+                    raise Exception("expected call_id for tool request")
                 message = Message(
                     role=Role.TOOL,
-                    content="",
                     function=FunctionCall(
-                        id=req.result_call_id or "",
                         name=req.result_tool_id,
+                        id=req.result_call_id,
                         arguments=req.args,
                     ),
                 )
 
-            # Append to history and complete with the LLM
+            # Append to history and complete with the underlying model.
             self._history.append(message)
-            response = self._llm.complete(self._history, self._functions)
+            completion = self._model.complete(self._history, self._tools)
+            self._history.append(completion)
 
-            # Convert response to appropriate message type and append to history
-            # Add response to history
-            self._history.append(response)
-
-            # Convert to tool result
-            if response.function:
+            # Handle any tool calls requested by the model.
+            if completion.function:
+                func = completion.function
                 return ToolResult(
-                    args=response.function.arguments,
-                    call_tool_id=response.function.name,
-                    call_id=response.function.id,
+                    args=func.arguments,
+                    call_tool_id=func.name,
+                    call_id=func.id,
                 )
 
-            response_args = _parse_content(response.content)
-            return ToolResult(response_args)
+            # Parse the response and return it as this minion's result.
+            # TODO: We'd probably be better off asking the LLM to call a "return" function.
+            if completion.content:
+                response_args = _parse_content(completion.content)
+                return ToolResult(response_args)
+            return ToolResult({})
 
         except Exception as e:
             # Catch exceptions, log them, and send them to the model in hopes it will sort itself.
@@ -79,25 +83,41 @@ class Minion(Tool):
             return ToolResult({"error": msg})
 
 
-def _parse_content(content: Optional[str]) -> Dict[str, Any]:
-    """Parse content into a dictionary from JSON string.
+def _parse_content(content: str) -> Dict[str, Any]:
+    """Parse content into a dictionary, handling both string and Part list inputs.
 
     Args:
-        content: JSON string to parse
+        content: Either a JSON string or a list of content parts
 
     Returns:
         Parsed dictionary from the JSON content
 
     Raises:
-        Exception: If no valid JSON is found
+        Exception: If no valid JSON is found or multiple JSON objects are found
     """
-    if not content:
-        raise Exception("No content to parse")
 
+    # Handle direct string input
     result = _try_parse_json(content)
     if result is None:
         raise Exception("No valid JSON dictionary found")
     return result
+
+    # valid_jsons = []
+    # Handle list of parts
+    # for part in content:
+    #     if part["type"] == "text":
+    #         result = _try_parse_json(part["text"].strip())
+    #         if result is not None:
+    #             valid_jsons.append(result)
+    #
+    # if len(valid_jsons) == 0:
+    #     raise Exception("No valid JSON dictionary found in any content parts")
+    # if len(valid_jsons) > 1:
+    #     raise Exception(
+    #         f"Found multiple ({len(valid_jsons)}) JSON objects: {valid_jsons}"
+    #     )
+    #
+    # return valid_jsons[0]
 
 
 def _try_parse_json(text: str) -> Optional[Dict[str, Any]]:

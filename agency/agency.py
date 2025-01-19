@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from agency.minion import Minion, MinionDecl
 from agency.tool import Tool, ToolCall, ToolContext, ToolResult
 from agency.utils import trunc
 
@@ -27,19 +26,11 @@ class Frame:
 
 class Agency:
     _stack: List[Frame]
-    _lair: Dict[str, MinionDecl]
     _toolbox: Dict[str, Tool]
 
-    def __init__(
-        self,
-        tools: List[Tool],
-        minions: List[MinionDecl],
-        model: str = "openai/gpt-3.5-turbo",
-    ):
+    def __init__(self, tools: List[Tool]):
         self._stack = []
-        self._lair = {min.id: min for min in minions}
         self._toolbox = {tool.decl.id: tool for tool in tools}
-        self._model = model
 
     def ask(self, tool_id: str, args: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a tool request, handling nested tool calls via the stack.
@@ -106,8 +97,4 @@ class Agency:
     def tool_by_id(self, tool_id: str) -> Tool:
         if tool_id in self._toolbox:
             return self._toolbox[tool_id]
-        if tool_id in self._lair:
-            min_decl = self._lair[tool_id]
-            min_tools = [self.tool_by_id(tool_decl.id) for tool_decl in min_decl.tools]
-            return Minion(min_decl, min_tools, self._model)
         raise Exception(f"no such tool: {tool_id}")
