@@ -24,16 +24,16 @@ class Minion(Tool):
     _history: List[Message]
     _tools: List[ToolDesc]
 
-    def __init__(self, decl: MinionDecl, tools: List[Tool]):
+    def __init__(self, decl: ToolDecl, template: str, tools: List[ToolDecl]):
         self.decl = decl
         self._history = []
-        self._template = Environment().from_string(decl.template)
+        self._template = Environment().from_string(template)
         self._tools = [
             {
                 "type": "function",
-                "function": tool.decl.to_func(),
+                "function": decl.to_func(),
             }
-            for tool in tools
+            for decl in tools
         ]
 
     def invoke(self, req: ToolCall) -> ToolResult:
@@ -76,6 +76,8 @@ class Minion(Tool):
                     call_id=id,
                 )
 
+            # Parse the response and return it as this minion's result.
+            # TODO: We'd probably be better off asking the LLM to call a "return" function.
             response_args = _parse_content(completion["content"])
             return ToolResult(response_args)
 

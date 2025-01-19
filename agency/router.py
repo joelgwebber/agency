@@ -10,7 +10,7 @@ from agency.keys import OPENROUTER_API_KEY
 # Try to use this to keep it from dumping raw text or multiple json responses.
 system_prompt: Message = {
     "role": "system",
-    "content": """Always return precisely one correctly-structured json output; never raw text.""",
+    "content": """Always return precisely one correctly-structured json object as output; never raw text.""",
 }
 
 
