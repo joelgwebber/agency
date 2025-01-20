@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from agency.tool import Tool, ToolCall, ToolContext, ToolResult
+from agency.tool import ResultToolId, Tool, ToolCall, ToolContext, ToolResult
 from agency.utils import trunc
 
 
@@ -68,7 +68,7 @@ class Agency:
                 )
             )
 
-            if response.call_tool_id is None:
+            if response.call_tool_id == ResultToolId:
                 # The Tool is done; pop it off the stack and pass the response to the underlying frame.
                 last_frame = self._stack.pop()
                 if len(self._stack) > 0:

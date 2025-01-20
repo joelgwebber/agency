@@ -4,6 +4,8 @@ from typing import Any, Dict, Optional, Protocol
 from agency.models import Function
 from agency.schema import Schema
 
+ResultToolId = "__result__"
+
 
 @dataclass
 class ToolContext:
@@ -53,7 +55,7 @@ class ToolResult:
     """
 
     args: Dict[str, Any]
-    call_tool_id: Optional[str] = field(default=None)
+    call_tool_id: str = field(default=ResultToolId)
     call_id: Optional[str] = field(default=None)
 
 
@@ -65,11 +67,7 @@ class ToolDecl:
     id: str
     desc: str
     params: Schema
-
-    def __init__(self, id: str, desc: str, params: Schema):
-        self.id = id
-        self.desc = desc
-        self.params = params
+    returns: Schema
 
     def to_func(self) -> Function:
         return Function(

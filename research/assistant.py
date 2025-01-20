@@ -25,15 +25,27 @@ model = OpenRouter()
 
 
 @schema()
-class ResearchArgs:
+class ResearchParams:
     question: str
+
+
+@schema()
+class ResearchResults:
+    answer: str
+
+
+@schema()
+class KnowledgeResults:
+    answer: str
+    search_terms: str
 
 
 GeneralKnowledge = Minion(
     ToolDecl(
         "general-knowledge",
         "Answers questions about general knowledge, useful as a starting point for further research",
-        schema_for(ResearchArgs),
+        schema_for(ResearchParams),
+        schema_for(KnowledgeResults),
     ),
     model,
     """Answer the following question in general terms, with the goal of creating starting points for further research.
@@ -47,7 +59,8 @@ ResearchAssistant = Minion(
     ToolDecl(
         "research-assistant",
         "A research assistant",
-        schema_for(ResearchArgs),
+        schema_for(ResearchParams),
+        schema_for(ResearchResults),
     ),
     model,
     """You are a research assistant, helping your human understand any topic.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
 import requests
 
@@ -11,16 +11,29 @@ from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 _TAVILY_API_URL = "https://api.tavily.com"
 
 
+@schema()
+class SearchResult:
+    url: str = prop("result url")
+    content: str = prop("result content")
+
+
 class Search(Tool):
+
     @schema()
-    class Args:
-        query: str = prop("The url to fetch")
-        max_results: int = prop("Maximum number of results", default=5)
+    class Params:
+        query: str = prop("url to fetch")
+        max_results: int = prop("maximum number of results", default=5)
+
+    @schema()
+    class Returns:
+        results: List[SearchResult] = prop("search results")
+        error: str = prop("API error", default=None)
 
     decl = ToolDecl(
         "search-query",
         "Performs a web search",
-        schema_for(Args),
+        schema_for(Params),
+        schema_for(Returns),
     )
 
     _api_key: str
@@ -31,7 +44,8 @@ class Search(Tool):
     def invoke(self, req: ToolCall) -> ToolResult:
         args = parse_val(req.args, Search.decl.params)
         raw_json = self._raw_results(args.query, args.max_results)
-        return ToolResult({"results": self._clean_results(raw_json)})
+        cleaned = self._clean_results(raw_json)
+        return ToolResult(dict(Search.Returns(results=cleaned)))
 
     def _raw_results(
         self,
@@ -60,26 +74,37 @@ class Search(Tool):
             f"{_TAVILY_API_URL}/search",
             json=params,
         )
-        # Return the repsonse json directly, even if it's an error.
+        # Return the response json directly, even if it's an error.
         # TODO: We may want to settle on a standard format for errors, so we can control behavior better.
         return rsp.json()
 
-    def _clean_results(self, results: Dict) -> Union[Dict, List[Dict]]:
+    # Results json from the Tavily API has the following structure:
+    # { query: str
+    #   follow_up_questions?: (unk)
+    #   answer?: str
+    #   images?: List[(unk)]
+    #   results: List[{
+    #     title: str
+    #     url: str
+    #     content: str
+    #     score: number
+    #     raw_content?: (unk)
+    #   }]
+    #   response_time: number
+    # }
+    def _clean_results(self, results: Dict) -> Search.Returns:
         """Clean results from Tavily Search API."""
         if "results" in results:
-            clean_results = []
+            clean_results: List[SearchResult] = []
             for result in results["results"]:
                 clean_results.append(
-                    {
-                        "url": result["url"],
-                        "content": result["content"],
-                    }
+                    SearchResult(url=result["url"], content=result["content"])
                 )
-            return clean_results
+            return Search.Returns(results=clean_results, error="")
 
         # Error details.
         elif "details" in results:
-            return results["details"]
+            return Search.Returns(error=results["details"])
 
         # Unknown output.
-        return results
+        return Search.Returns(error="unknown api error")

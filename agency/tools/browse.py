@@ -14,13 +14,18 @@ from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 # Filed a bug here: https://github.com/Unstructured-IO/unstructured/issues/3606
 class Browse(Tool):
     @schema()
-    class Args:
-        url: str = prop("The url to fetch")
+    class Params:
+        url: str = prop("url to fetch")
+
+    @schema()
+    class Returns:
+        text: str = prop("text representation of the url content")
 
     decl = ToolDecl(
         "browse-url",
         "Returns the contents at the specified URL.",
-        schema_for(Args),
+        schema_for(Params),
+        schema_for(Returns),
     )
 
     def invoke(self, req: ToolCall) -> ToolResult:

@@ -85,22 +85,7 @@ class OpenRouter(Model):
 
     def _convert_messages(self, messages: List[Message]) -> List[ORMessage]:
         """Convert agency Messages to OpenRouter format."""
-        or_messages: List[ORMessage] = []
-
-        # Add required system message for JSON output
-        or_messages.append(
-            ORMessage(
-                role="system",
-                content="Always return precisely one correctly-structured json output; never raw text.",
-            )
-        )
-
-        # Convert each message
-        for msg in messages:
-            or_message = self._convert_message(msg)
-            or_messages.append(or_message)
-
-        return or_messages
+        return [self._convert_message(msg) for msg in messages]
 
     def _convert_functions(
         self, functions: Optional[List[Function]]
@@ -125,7 +110,6 @@ class OpenRouter(Model):
         """Build the OpenRouter API request."""
         request = ORRequest(
             model=self._model_id,
-            response_format=ORResponseFormat(type="json_object"),
             messages=messages,
         )
         if functions:

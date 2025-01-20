@@ -1,13 +1,16 @@
-import json
 import traceback
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from jinja2 import Environment
 from jinja2.environment import Template
 
 from agency.models import Function, FunctionCall, Message, Model, Role
-from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
+from agency.tool import ResultToolId, Tool, ToolCall, ToolDecl, ToolResult
+
+prompt_suffix = (
+    "\nRemember to call the __result__ tool rather than returning text directly."
+)
 
 
 @dataclass
@@ -33,14 +36,30 @@ class Minion(Tool):
         self._model = model
         self._template = Environment().from_string(template)
         self._tools = [decl.to_func() for decl in tools]
-        self._history = []
+
+        # Add the __result__ pseudo-tool.
+        self._tools.append(
+            Function(
+                ResultToolId,
+                "always use this tool to provide results",
+                decl.returns.to_openapi(),
+            )
+        )
+
+        # Initialize history with the system message.
+        self._history = [
+            Message(
+                Role.SYSTEM,
+                "Always use the __result__ tool to respond; never respond with raw text.",
+            )
+        ]
 
     def invoke(self, req: ToolCall) -> ToolResult:
         try:
             message: Message
             if not req.result_tool_id:
                 # Initial request to this tool.
-                prompt = self._template.render(req.args)
+                prompt = self._template.render(req.args) + prompt_suffix
                 message = Message(role=Role.USER, content=prompt)
             else:
                 # Getting a response from a tool invocation.
@@ -69,63 +88,11 @@ class Minion(Tool):
                     call_id=func.id,
                 )
 
-            # Parse the response and return it as this minion's result.
-            # TODO: We'd probably be better off asking the LLM to call a "return" function.
-            if completion.content:
-                response_args = _parse_content(completion.content)
-                return ToolResult(response_args)
-            return ToolResult({})
+            # TODO: Tell the LM to quit sending raw text.
+            raise Exception(f"unexpected text in minion result: {completion.content}")
 
         except Exception as e:
             # Catch exceptions, log them, and send them to the model in hopes it will sort itself.
             msg = f"""exception calling {self.decl.id}: {e}
                      {"\n".join(traceback.format_exception(e))}"""
             return ToolResult({"error": msg})
-
-
-def _parse_content(content: str) -> Dict[str, Any]:
-    """Parse content into a dictionary, handling both string and Part list inputs.
-
-    Args:
-        content: Either a JSON string or a list of content parts
-
-    Returns:
-        Parsed dictionary from the JSON content
-
-    Raises:
-        Exception: If no valid JSON is found or multiple JSON objects are found
-    """
-
-    # Handle direct string input
-    result = _try_parse_json(content)
-    if result is None:
-        raise Exception("No valid JSON dictionary found")
-    return result
-
-    # valid_jsons = []
-    # Handle list of parts
-    # for part in content:
-    #     if part["type"] == "text":
-    #         result = _try_parse_json(part["text"].strip())
-    #         if result is not None:
-    #             valid_jsons.append(result)
-    #
-    # if len(valid_jsons) == 0:
-    #     raise Exception("No valid JSON dictionary found in any content parts")
-    # if len(valid_jsons) > 1:
-    #     raise Exception(
-    #         f"Found multiple ({len(valid_jsons)}) JSON objects: {valid_jsons}"
-    #     )
-    #
-    # return valid_jsons[0]
-
-
-def _try_parse_json(text: str) -> Optional[Dict[str, Any]]:
-    try:
-        parsed = json.loads(text)
-        if isinstance(parsed, dict):
-            return parsed
-        return None
-    except json.JSONDecodeError as e:
-        print(f"--- error decoding json: {e}\n{text}")
-        return None

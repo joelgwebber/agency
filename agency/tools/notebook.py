@@ -4,9 +4,9 @@ The notes are stored in a vector database with computed embeddings for later ret
 """
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, List
 
-from agency.schema import parse_val, prop, schema, schema_for
+from agency.schema import Schema, Type, parse_val, prop, schema, schema_for
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 from agency.tools.docstore import Docstore
 
@@ -14,7 +14,7 @@ from agency.tools.docstore import Docstore
 @dataclass
 class RecordNote(Tool):
     @schema()
-    class Args:
+    class Params:
         id: str = prop("unique note id")
         text: str = prop("note text")
         labels: Dict[str, str] = prop(
@@ -24,7 +24,8 @@ class RecordNote(Tool):
     decl = ToolDecl(
         "record-note",
         "Records a note in the notebook for later research. Use simple semantic ids.",
-        schema_for(Args),
+        schema_for(Params),
+        Schema(Type.Object, ""),
     )
 
     store: Docstore
@@ -38,7 +39,7 @@ class RecordNote(Tool):
 @dataclass
 class UpdateNote(Tool):
     @schema()
-    class Args:
+    class Params:
         id: str = prop("note id to update")
         new_id: str = prop("new note id (may be the same)")
         text: str = prop("new note text")
@@ -49,7 +50,8 @@ class UpdateNote(Tool):
     decl = ToolDecl(
         "update-note",
         "Updates a note from the notebook.",
-        schema_for(Args),
+        schema_for(Params),
+        Schema(Type.Object, ""),
     )
 
     store: Docstore
@@ -65,13 +67,14 @@ class UpdateNote(Tool):
 @dataclass
 class RemoveNote(Tool):
     @schema()
-    class Args:
+    class Params:
         id: str = prop("note id to remove")
 
     decl = ToolDecl(
         "remove-note",
         "Removes a note from the notebook.",
-        schema_for(Args),
+        schema_for(Params),
+        Schema(Type.Object, ""),
     )
 
     store: Docstore
@@ -85,14 +88,19 @@ class RemoveNote(Tool):
 @dataclass
 class LookupNotes(Tool):
     @schema()
-    class Args:
+    class Params:
         reference: str = prop("reference text")
         max_results: int = prop("maximum number of documents to return", default=5)
+
+    @schema()
+    class Returns:
+        notes: List[str] = prop("notes matching the reference text")
 
     decl = ToolDecl(
         "lookup-notes",
         "Looks up notes in the notebook.",
-        schema_for(Args),
+        schema_for(Params),
+        schema_for(Returns),
     )
 
     store: Docstore
