@@ -29,11 +29,13 @@ class MockTool(Tool):
 def test_simple_tool_execution():
     """Test executing a single tool that returns a direct result."""
     mock_tool = MockTool(
-        decl=ToolDecl(id="mock1", desc="Mock Tool 1", params=_str_schema),
+        decl=ToolDecl(
+            id="mock1", desc="Mock Tool 1", params=_str_schema, returns=_str_schema
+        ),
         responses=[ToolResult(args={"result": "success"})],
     )
 
-    agency = Agency(tools=[mock_tool], minions=[])
+    agency = Agency(tools=[mock_tool])
     result = agency.ask("mock1", {"input": "test"})
 
     assert result == {"result": "success"}
@@ -42,7 +44,9 @@ def test_simple_tool_execution():
 def test_nested_tool_execution():
     """Test executing nested tools where one tool calls another."""
     mock_tool1 = MockTool(
-        decl=ToolDecl(id="mock1", desc="Mock Tool 1", params=_str_schema),
+        decl=ToolDecl(
+            id="mock1", desc="Mock Tool 1", params=_str_schema, returns=_str_schema
+        ),
         responses=[
             # First call another tool
             ToolResult(
@@ -54,11 +58,13 @@ def test_nested_tool_execution():
     )
 
     mock_tool2 = MockTool(
-        decl=ToolDecl(id="mock2", desc="Mock Tool 2", params=_str_schema),
+        decl=ToolDecl(
+            id="mock2", desc="Mock Tool 2", params=_str_schema, returns=_str_schema
+        ),
         responses=[ToolResult(args={"nested_result": "success"})],
     )
 
-    agency = Agency(tools=[mock_tool1, mock_tool2], minions=[])
+    agency = Agency(tools=[mock_tool1, mock_tool2])
     result = agency.ask("mock1", {"input": "test"})
 
     assert result == {"final": "done"}
@@ -67,7 +73,9 @@ def test_nested_tool_execution():
 def test_deep_nested_tool_execution():
     """Test executing deeply nested tools (3 levels)."""
     mock_tool1 = MockTool(
-        decl=ToolDecl(id="mock1", desc="Mock Tool 1", params=_str_schema),
+        decl=ToolDecl(
+            id="mock1", desc="Mock Tool 1", params=_str_schema, returns=_str_schema
+        ),
         responses=[
             ToolResult(args={"level1": "test"}, call_tool_id="mock2", call_id="call1"),
             ToolResult(args={"final": "done"}),
@@ -75,7 +83,9 @@ def test_deep_nested_tool_execution():
     )
 
     mock_tool2 = MockTool(
-        decl=ToolDecl(id="mock2", desc="Mock Tool 2", params=_str_schema),
+        decl=ToolDecl(
+            id="mock2", desc="Mock Tool 2", params=_str_schema, returns=_str_schema
+        ),
         responses=[
             ToolResult(args={"level2": "test"}, call_tool_id="mock3", call_id="call2"),
             ToolResult(
@@ -85,11 +95,13 @@ def test_deep_nested_tool_execution():
     )
 
     mock_tool3 = MockTool(
-        decl=ToolDecl(id="mock3", desc="Mock Tool 3", params=_str_schema),
+        decl=ToolDecl(
+            id="mock3", desc="Mock Tool 3", params=_str_schema, returns=_str_schema
+        ),
         responses=[ToolResult(args={"level3": "success"})],
     )
 
-    agency = Agency(tools=[mock_tool1, mock_tool2, mock_tool3], minions=[])
+    agency = Agency(tools=[mock_tool1, mock_tool2, mock_tool3])
     result = agency.ask("mock1", {"input": "test"})
 
     assert result == {"final": "done"}
@@ -97,7 +109,7 @@ def test_deep_nested_tool_execution():
 
 def test_tool_not_found():
     """Test error handling when requesting a non-existent tool."""
-    agency = Agency(tools=[], minions=[])
+    agency = Agency(tools=[])
 
     with pytest.raises(Exception) as exc:
         agency.ask("nonexistent", {})
@@ -114,11 +126,14 @@ def test_tool_throws_exception():
         raise ValueError("Simulated error")
 
     mock_tool = MockTool(
-        decl=ToolDecl(id="error", desc="Error Tool", params=_str_schema), responses=[]
+        decl=ToolDecl(
+            id="error", desc="Error Tool", params=_str_schema, returns=_str_schema
+        ),
+        responses=[],
     )
     mock_tool.invoke = error_invoke
 
-    agency = Agency(tools=[mock_tool], minions=[])
+    agency = Agency(tools=[mock_tool])
 
     with pytest.raises(ValueError) as exc:
         agency.ask("error", {})
