@@ -5,6 +5,7 @@ from agency.models import Function
 from agency.schema import Schema
 
 ResultToolId = "__result__"
+ExceptToolId = "__except__"
 
 
 @dataclass

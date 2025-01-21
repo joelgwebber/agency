@@ -3,7 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from agency.tool import ResultToolId, Tool, ToolCall, ToolContext, ToolResult
+from agency.minion import Except
+from agency.schema import parse_val, schema_for
+from agency.tool import (
+    ExceptToolId,
+    ResultToolId,
+    Tool,
+    ToolCall,
+    ToolContext,
+    ToolResult,
+)
 from agency.utils import trunc
 
 
@@ -58,6 +67,9 @@ class Agency:
             print(
                 f"--> invoking {frame.tool_id} <- {frame.result_tool_id}({frame.result_call_id})\n{trunc(str(args), 120)}"
             )
+
+            # TODO: Catch any exception and return it to the caller as a
+            # structured error response, focusing on LLM self-repair.
             response = frame.tool.invoke(
                 ToolCall(
                     name=frame.tool_id,
@@ -75,6 +87,9 @@ class Agency:
                     self._stack[-1].respond(
                         last_frame.tool_id, last_frame.call_id, response.args
                     )
+            elif response.call_tool_id == ExceptToolId:
+                ex = parse_val(response.args, schema_for(Except))
+                raise Exception(ex.message)
             else:
                 # It wants to call another tool; push it on the stack.
                 self.push_tool(

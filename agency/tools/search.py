@@ -27,7 +27,7 @@ class Search(Tool):
     @schema()
     class Returns:
         results: List[SearchResult] = prop("search results")
-        error: str = prop("API error", default=None)
+        error: str = prop("API error", default="")
 
     decl = ToolDecl(
         "search-query",

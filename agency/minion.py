@@ -6,11 +6,18 @@ from jinja2 import Environment
 from jinja2.environment import Template
 
 from agency.models import Function, FunctionCall, Message, Model, Role
-from agency.tool import ResultToolId, Tool, ToolCall, ToolDecl, ToolResult
+from agency.schema import prop, schema, schema_for
+from agency.tool import ExceptToolId, ResultToolId, Tool, ToolCall, ToolDecl, ToolResult
 
-prompt_suffix = (
-    "\nRemember to call the __result__ tool rather than returning text directly."
-)
+prompt_suffix = """
+Remember to call the __result__ tool rather than returning text directly.
+If an error or unexpected condition occurs, call the __except__ function with an explanation.
+"""
+
+
+@schema()
+class Except:
+    message: str = prop(desc="error message")
 
 
 @dataclass
@@ -37,12 +44,20 @@ class Minion(Tool):
         self._template = Environment().from_string(template)
         self._tools = [decl.to_func() for decl in tools]
 
-        # Add the __result__ pseudo-tool.
+        # Add the __result__ and __except__ pseudo-tools.
         self._tools.append(
             Function(
                 ResultToolId,
                 "always use this tool to provide results",
                 decl.returns.to_openapi(),
+            )
+        )
+
+        self._tools.append(
+            Function(
+                ExceptToolId,
+                "use this tool when an error or unexpected condition occurs",
+                schema_for(Except).to_openapi(),
             )
         )
 
@@ -89,10 +104,13 @@ class Minion(Tool):
                 )
 
             # TODO: Tell the LM to quit sending raw text.
-            raise Exception(f"unexpected text in minion result: {completion.content}")
+            # Maybe think of a better fallback for when it happens anyway.
+            print("(WARN: extra minion text)", completion.content)
+            return ToolResult({})
 
         except Exception as e:
             # Catch exceptions, log them, and send them to the model in hopes it will sort itself.
+            print(">>>", self._history)
             msg = f"""exception calling {self.decl.id}: {e}
                      {"\n".join(traceback.format_exception(e))}"""
             return ToolResult({"error": msg})

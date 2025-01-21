@@ -13,7 +13,9 @@ from agency.tool import ToolDecl
 from agency.tools.browse import Browse
 from agency.tools.docstore import Docstore
 from agency.tools.feedback import GetFeedback, LogStore, SubmitFeedback
-from agency.tools.notebook import LookupNotes, RecordNote, RemoveNote, UpdateNote
+from agency.tools.files import EditFile, ReadFile
+from agency.tools.notebook import (LookupNotes, RecordNote, RemoveNote,
+                                   UpdateNote)
 from agency.tools.search import Search
 from agency.ui import AgencyUI
 
@@ -73,10 +75,12 @@ ResearchAssistant = Minion(
         GeneralKnowledge.decl,
         Search.decl,
         Browse.decl,
-        RecordNote.decl,
-        UpdateNote.decl,
-        RemoveNote.decl,
-        LookupNotes.decl,
+        # RecordNote.decl,
+        # UpdateNote.decl,
+        # RemoveNote.decl,
+        # LookupNotes.decl,
+        ReadFile.decl,
+        EditFile.decl,
     ],
 )
 
@@ -92,6 +96,8 @@ def run():
             UpdateNote(notebook),
             RemoveNote(notebook),
             LookupNotes(notebook),
+            ReadFile("research/src"),
+            EditFile("research/src"),
             SubmitFeedback(feedback),
             GetFeedback(feedback),
         ]
