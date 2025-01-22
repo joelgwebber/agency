@@ -45,8 +45,8 @@ class EditFile(Tool):
     @schema()
     class Params:
         file: str = prop("the filename to edit")
-        old_lines: List[str] = prop("the original contents of the lines to be updated")
-        new_lines: str = prop("the new lines to replace the originals")
+        old_text: str = prop("the original text to be updated")
+        new_text: str = prop("the new text to replace the original")
 
     decl = ToolDecl(
         "edit-file",
@@ -59,15 +59,15 @@ class EditFile(Tool):
 
     def invoke(self, req: ToolCall) -> ToolResult:
         args = parse_val(req.args, EditFile.decl.params)
-        print("-old lines-------------------------", args.old_lines)
-        print("-new lines-------------------------", args.new_lines)
-        print("-----------------------------------")
+        print("-old text-------------------------\n", args.old_text)
+        print("-new text-------------------------\n", args.new_text)
+        print("----------------------------------")
         return _handle_file_operation(
             args.file,
             self.root_path,
             lambda path: (
                 {"error": err}
-                if (err := _edit_file_content(path, args.old_lines, args.new_lines))
+                if (err := _edit_file_content(path, args.old_text, args.new_text))
                 else {}
             ),
         )
@@ -97,9 +97,7 @@ def _handle_file_operation(
         return ToolResult({"error": f"Error accessing file {filename}: {str(e)}"})
 
 
-def _edit_file_content(
-    path: str, old_lines: List[str], new_lines: str
-) -> Optional[str]:
+def _edit_file_content(path: str, old_text: str, new_text: str) -> Optional[str]:
     """Edit a file's content, replacing old_lines with new_lines.
 
     Args:
@@ -113,14 +111,13 @@ def _edit_file_content(
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    old_text = "\n".join(old_lines)
     if old_text not in content:
         return (
             f"Could not find the exact lines to replace in {path}. "
             "Please verify the old_lines match exactly."
         )
 
-    new_content = content.replace(old_text, new_lines)
+    new_content = content.replace(old_text, new_text)
     with open(path, "w", encoding="utf-8") as f:
         f.write(new_content)
 

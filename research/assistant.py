@@ -14,8 +14,7 @@ from agency.tools.browse import Browse
 from agency.tools.docstore import Docstore
 from agency.tools.feedback import GetFeedback, LogStore, SubmitFeedback
 from agency.tools.files import EditFile, ReadFile
-from agency.tools.notebook import (LookupNotes, RecordNote, RemoveNote,
-                                   UpdateNote)
+from agency.tools.notebook import LookupNotes, RecordNote, RemoveNote, UpdateNote
 from agency.tools.search import Search
 from agency.ui import AgencyUI
 
@@ -23,7 +22,7 @@ tool_name = "research"
 dbclient = chromadb.PersistentClient(os.path.join(tool_name, "chroma"))
 feedback = LogStore(dbclient, tool_name, "feedback")
 notebook = Docstore(dbclient, tool_name, "notebook")
-model = OpenRouter()
+model = OpenRouter("anthropic/claude-3.5-sonnet")
 
 
 @schema()
