@@ -1,6 +1,10 @@
 import unittest
 from typing import List
 
+from research.src import foo
+
+print(foo.bar())
+
 
 def sort_numbers(numbers: List[int]) -> List[int]:
     """Sort a list of numbers in ascending order."""

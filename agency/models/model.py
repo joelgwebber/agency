@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from agency.models.openapi import OpenAPISchema
+from openapi import OpenAPISchema
 
 
 class Role(Enum):
@@ -49,6 +49,7 @@ class Model:
     def complete(
         self,
         messages: List[Message],
+        response: Optional[OpenAPISchema],
         functions: Optional[List[Function]] = None,
     ) -> Message:
         """Get a completion from the language model.
@@ -56,7 +57,6 @@ class Model:
         Args:
             messages: The conversation history
             functions: Available functions the LLM can call
-            function_result: Result from previous function call
 
         Returns:
             The model's response, either content or a function call

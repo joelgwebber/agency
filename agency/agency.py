@@ -5,14 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from agency.minion import Except
 from agency.schema import parse_val, schema_for
-from agency.tool import (
-    ExceptToolId,
-    ResultToolId,
-    Tool,
-    ToolCall,
-    ToolContext,
-    ToolResult,
-)
+from agency.tool import (ExceptToolId, ResultToolId, Tool, ToolCall,
+                         ToolContext, ToolResult)
 from agency.utils import trunc
 
 

@@ -31,6 +31,7 @@ class OpenRouter(Model):
     def complete(
         self,
         messages: List[Message],
+        response: Optional[OpenAPISchema] = None,
         functions: Optional[List[Function]] = None,
     ) -> Message:
         """Complete a conversation using the OpenRouter API."""
@@ -201,7 +202,14 @@ class ORRequest(TypedDict):
 
 
 class ORResponseFormat(TypedDict):
-    type: Literal["json_object"]
+    type: Literal["json_object", "json_schema"]
+    json_schema: ORResponseSchema
+
+
+class ORResponseSchema(TypedDict):
+    name: NotRequired[str]
+    strict: NotRequired[bool]
+    schema: OpenAPISchema
 
 
 # https://openrouter.ai/docs/responses
