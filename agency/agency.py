@@ -3,10 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from agency.minion import Except
-from agency.schema import parse_val, schema_for
-from agency.tool import (ExceptToolId, ResultToolId, Tool, ToolCall,
-                         ToolContext, ToolResult)
+from agency.tool import Tool, ToolCall, ToolContext, ToolResult
 from agency.utils import trunc
 
 
@@ -53,7 +50,7 @@ class Agency:
         Raises:
             Exception: If tool_id is not found
         """
-        response: Optional[ToolResult] = None
+        result: Optional[ToolResult] = None
         self.push_tool(tool_id, args, "")
         while len(self._stack) > 0:
             frame = self._stack[-1]
@@ -64,7 +61,7 @@ class Agency:
 
             # TODO: Catch any exception and return it to the caller as a
             # structured error response, focusing on LLM self-repair.
-            response = frame.tool.invoke(
+            result = frame.tool.invoke(
                 ToolCall(
                     name=frame.tool_id,
                     args=args,
@@ -74,23 +71,18 @@ class Agency:
                 )
             )
 
-            if response.call_tool_id == ResultToolId:
+            if result.call_tool_id:
+                # It wants to call another tool; push it on the stack.
+                self.push_tool(result.call_tool_id, result.args, result.call_id or "")
+            else:
                 # The Tool is done; pop it off the stack and pass the response to the underlying frame.
                 last_frame = self._stack.pop()
                 if len(self._stack) > 0:
                     self._stack[-1].respond(
-                        last_frame.tool_id, last_frame.call_id, response.args
+                        last_frame.tool_id, last_frame.call_id, result.args
                     )
-            elif response.call_tool_id == ExceptToolId:
-                ex = parse_val(response.args, schema_for(Except))
-                raise Exception(ex.message)
-            else:
-                # It wants to call another tool; push it on the stack.
-                self.push_tool(
-                    response.call_tool_id, response.args, response.call_id or ""
-                )
 
-        return response.args if response else {}
+        return result.args if result else {}
 
     def push_tool(self, tool_id: str, args: Dict[str, Any], call_id: str):
         """Push a tool onto the stack by its ID."""

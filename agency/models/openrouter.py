@@ -40,7 +40,7 @@ class OpenRouter(Model):
         or_functions = self._convert_functions(functions)
 
         # Build and send request
-        request = self._build_request(or_messages, or_functions)
+        request = self._build_request(or_messages, or_functions, response)
         rsp = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -106,7 +106,10 @@ class OpenRouter(Model):
         ]
 
     def _build_request(
-        self, messages: List[ORMessage], functions: Optional[List[ORToolDesc]]
+        self,
+        messages: List[ORMessage],
+        functions: Optional[List[ORToolDesc]],
+        response: Optional[OpenAPISchema],
     ) -> ORRequest:
         """Build the OpenRouter API request."""
         request = ORRequest(
@@ -115,6 +118,15 @@ class OpenRouter(Model):
         )
         if functions:
             request["tools"] = functions
+        if response:
+            request["response_format"] = ORResponseFormat(
+                type="json_schema",
+                json_schema=ORResponseSchema(
+                    name="response",  # TODO: Does having a real name help the model?
+                    strict=True,
+                    schema=response,
+                ),
+            )
         return request
 
     def _handle_response(self, rsp: Dict) -> Message:

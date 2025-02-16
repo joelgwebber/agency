@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from typing import List
 
 import chromadb
 
@@ -22,7 +23,7 @@ tool_name = "research"
 dbclient = chromadb.PersistentClient(os.path.join(tool_name, "chroma"))
 feedback = LogStore(dbclient, tool_name, "feedback")
 notebook = Docstore(dbclient, tool_name, "notebook")
-model = OpenRouter("anthropic/claude-3.5-sonnet")
+sonnet = OpenRouter("anthropic/claude-3.5-sonnet")
 
 
 @schema()
@@ -38,7 +39,7 @@ class ResearchResults:
 @schema()
 class KnowledgeResults:
     answer: str
-    search_terms: str
+    search_terms: List[str]
 
 
 GeneralKnowledge = Minion(
@@ -48,9 +49,8 @@ GeneralKnowledge = Minion(
         schema_for(ResearchParams),
         schema_for(KnowledgeResults),
     ),
-    model,
-    """Answer the following question in general terms, with the goal of creating starting points for further research.
-    Response format: {"answer": "(answer)", "search_terms": ["(term0)", "(term1)", ...]}:
+    sonnet,
+    """Answer the following question in general terms, with the goal of creating starting points for further research:
     {{ question }}""",
     [],
 )
@@ -63,7 +63,7 @@ ResearchAssistant = Minion(
         schema_for(ResearchParams),
         schema_for(ResearchResults),
     ),
-    model,
+    sonnet,
     """You are a research assistant, helping your human understand any topic.
     - Use the notebook to record notes as you go, looking them up by subject when needed
     - Notebook entries are in markdown format, using [[wiki-links]] to connect them.

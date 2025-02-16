@@ -1,3 +1,4 @@
+import json
 import traceback
 from dataclasses import dataclass
 from typing import List
@@ -6,18 +7,7 @@ from jinja2 import Environment
 from jinja2.environment import Template
 
 from agency.models import Function, FunctionCall, Message, Model, Role
-from agency.schema import prop, schema, schema_for
-from agency.tool import ExceptToolId, ResultToolId, Tool, ToolCall, ToolDecl, ToolResult
-
-prompt_suffix = """
-Remember to call the __result__ tool rather than returning text directly.
-If an error or unexpected condition occurs, call the __except__ function with an explanation.
-"""
-
-
-@schema()
-class Except:
-    message: str = prop(desc="error message")
+from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 
 
 @dataclass
@@ -44,28 +34,11 @@ class Minion(Tool):
         self._template = Environment().from_string(template)
         self._tools = [decl.to_func() for decl in tools]
 
-        # Add the __result__ and __except__ pseudo-tools.
-        self._tools.append(
-            Function(
-                ResultToolId,
-                "always use this tool to provide results",
-                decl.returns.to_openapi(),
-            )
-        )
-
-        self._tools.append(
-            Function(
-                ExceptToolId,
-                "use this tool when an error or unexpected condition occurs",
-                schema_for(Except).to_openapi(),
-            )
-        )
-
         # Initialize history with the system message.
         self._history = [
             Message(
                 Role.SYSTEM,
-                "Always use the __result__ tool to respond; never respond with raw text.",
+                "Always invoke functions or return a structured JSON result. Never return raw text.",
             )
         ]
 
@@ -74,7 +47,7 @@ class Minion(Tool):
             message: Message
             if not req.result_tool_id:
                 # Initial request to this tool.
-                prompt = self._template.render(req.args) + prompt_suffix
+                prompt = self._template.render(req.args)
                 message = Message(role=Role.USER, content=prompt)
             else:
                 # Getting a response from a tool invocation.
@@ -91,7 +64,9 @@ class Minion(Tool):
 
             # Append to history and complete with the underlying model.
             self._history.append(message)
-            completion = self._model.complete(self._history, self._tools)
+            completion = self._model.complete(
+                self._history, self.decl.returns.to_openapi(), self._tools
+            )
             self._history.append(completion)
 
             # Handle any tool calls requested by the model.
@@ -103,10 +78,15 @@ class Minion(Tool):
                     call_id=func.id,
                 )
 
-            # TODO: Tell the LM to quit sending raw text.
-            # Maybe think of a better fallback for when it happens anyway.
-            print("(WARN: extra minion text)", completion.content)
-            return ToolResult({})
+            # Otherwise we have a result.
+            if completion.content:
+                try:
+                    result = json.loads(completion.content)
+                    return ToolResult(result)
+                except json.JSONDecodeError:
+                    print(">>>", completion.content)
+
+            return ToolResult({"error": "Expected structured output"})
 
         except Exception as e:
             # Catch exceptions, log them, and send them to the model in hopes it will sort itself.

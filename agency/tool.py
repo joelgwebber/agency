@@ -4,8 +4,8 @@ from typing import Any, Dict, Optional, Protocol
 from agency.models import Function
 from agency.schema import Schema
 
-ResultToolId = "__result__"
-ExceptToolId = "__except__"
+# ResultToolId = "__result__"
+# ExceptToolId = "__except__"
 
 
 @dataclass
@@ -56,7 +56,7 @@ class ToolResult:
     """
 
     args: Dict[str, Any]
-    call_tool_id: str = field(default=ResultToolId)
+    call_tool_id: Optional[str] = field(default=None)
     call_id: Optional[str] = field(default=None)
 
 

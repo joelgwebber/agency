@@ -108,14 +108,11 @@ def _edit_file_content(path: str, old_text: str, new_text: str) -> Optional[str]
     Returns:
         Error message if operation failed, None if successful
     """
-    with open(path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    if old_text not in content:
-        return (
-            f"Could not find the exact lines to replace in {path}. "
-            "Please verify the old_lines match exactly."
-        )
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except FileNotFoundError:
+        content = ""
 
     new_content = content.replace(old_text, new_text)
     with open(path, "w", encoding="utf-8") as f:

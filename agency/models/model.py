@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from openapi import OpenAPISchema
+from .openapi import OpenAPISchema
 
 
 class Role(Enum):
