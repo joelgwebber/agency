@@ -3,7 +3,7 @@ from typing import List
 
 import pytest
 
-from agency.agency import Agency
+from agency.agency import Agent
 from agency.schema import Schema, Type
 from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
 
@@ -35,7 +35,7 @@ def test_simple_tool_execution():
         responses=[ToolResult(args={"result": "success"})],
     )
 
-    agency = Agency(tools=[mock_tool])
+    agency = Agent(tools=[mock_tool])
     result = agency.ask("mock1", {"input": "test"})
 
     assert result == {"result": "success"}
@@ -64,7 +64,7 @@ def test_nested_tool_execution():
         responses=[ToolResult(args={"nested_result": "success"})],
     )
 
-    agency = Agency(tools=[mock_tool1, mock_tool2])
+    agency = Agent(tools=[mock_tool1, mock_tool2])
     result = agency.ask("mock1", {"input": "test"})
 
     assert result == {"final": "done"}
@@ -101,7 +101,7 @@ def test_deep_nested_tool_execution():
         responses=[ToolResult(args={"level3": "success"})],
     )
 
-    agency = Agency(tools=[mock_tool1, mock_tool2, mock_tool3])
+    agency = Agent(tools=[mock_tool1, mock_tool2, mock_tool3])
     result = agency.ask("mock1", {"input": "test"})
 
     assert result == {"final": "done"}
@@ -109,7 +109,7 @@ def test_deep_nested_tool_execution():
 
 def test_tool_not_found():
     """Test error handling when requesting a non-existent tool."""
-    agency = Agency(tools=[])
+    agency = Agent(tools=[])
 
     with pytest.raises(Exception) as exc:
         agency.ask("nonexistent", {})
@@ -133,7 +133,7 @@ def test_tool_throws_exception():
     )
     mock_tool.invoke = error_invoke
 
-    agency = Agency(tools=[mock_tool])
+    agency = Agent(tools=[mock_tool])
 
     with pytest.raises(ValueError) as exc:
         agency.ask("error", {})

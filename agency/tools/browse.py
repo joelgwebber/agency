@@ -5,31 +5,33 @@ from urllib.parse import urljoin
 from playwright.sync_api import Response, sync_playwright
 from unstructured.partition.auto import partition
 
-from agency.schema import parse_val, prop, schema, schema_for
-from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
+from agency.schema import parse_val, prop, schema, schema_for, serialize_val
+from agency.tool import Stack, Tool, ToolDecl
 
 
 # NOTE: The unstructured partition() function is skipping some elements for HTML,
 # including the use of <figure>, which is quite common on Wikipedia and other sources.
 # Filed a bug here: https://github.com/Unstructured-IO/unstructured/issues/3606
 class Browse(Tool):
-    @schema()
+    @schema
     class Params:
         url: str = prop("url to fetch")
 
-    @schema()
+    @schema
     class Returns:
         text: str = prop("text representation of the url content")
 
-    decl = ToolDecl(
-        "browse-url",
-        "Returns the contents at the specified URL.",
-        schema_for(Params),
-        schema_for(Returns),
-    )
+    @property
+    def decl(self) -> ToolDecl:
+        return ToolDecl(
+            "browse-url",
+            "Returns the contents at the specified URL.",
+            schema_for(Browse.Params),
+            schema_for(Browse.Returns),
+        )
 
-    def invoke(self, req: ToolCall) -> ToolResult:
-        args = parse_val(req.args, Browse.decl.params)
+    def invoke(self, stack: Stack):
+        args = parse_val(stack.top().args, self.decl.params)
 
         with sync_playwright() as p:
             try:
@@ -46,7 +48,8 @@ class Browse(Tool):
                 file = io.BytesIO(bytes(page.content(), "UTF-8"))
                 browser.close()
             except Exception as e:
-                return ToolResult({"error": repr(e)})
+                stack.error(repr(e))
+                return
 
             # Parse out the elements using unstructured.partition.
             # TODO: Why isn't this getting navigation links or images?
@@ -69,7 +72,9 @@ class Browse(Tool):
                     print(f"--> image: {elem}")
                     texts.append("!" + _format_image(args.url, meta.image_path))
 
-            return ToolResult({"text": "\n".join(texts)})
+            stack.respond(
+                serialize_val(Browse.Returns("\n".join(texts)), self.decl.returns)
+            )
 
 
 def _format_link(base: str, url: str, text: str) -> str:

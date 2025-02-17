@@ -4,14 +4,14 @@ from typing import Dict, List, Optional
 
 import requests
 
-from agency.schema import parse_val, prop, schema, schema_for
-from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
+from agency.schema import parse_val, prop, schema, schema_for, serialize_val
+from agency.tool import Stack, Tool, ToolDecl
 
 # Just use Tavily for now.
 _TAVILY_API_URL = "https://api.tavily.com"
 
 
-@schema()
+@schema
 class SearchResult:
     url: str = prop("result url")
     content: str = prop("result content")
@@ -19,33 +19,35 @@ class SearchResult:
 
 class Search(Tool):
 
-    @schema()
+    @schema
     class Params:
         query: str = prop("url to fetch")
         max_results: int = prop("maximum number of results", default=5)
 
-    @schema()
+    @schema
     class Returns:
         results: List[SearchResult] = prop("search results")
         error: str = prop("API error", default="")
-
-    decl = ToolDecl(
-        "search-query",
-        "Performs a web search",
-        schema_for(Params),
-        schema_for(Returns),
-    )
 
     _api_key: str
 
     def __init__(self, api_key: str):
         self._api_key = api_key
 
-    def invoke(self, req: ToolCall) -> ToolResult:
-        args = parse_val(req.args, Search.decl.params)
+    @property
+    def decl(self) -> ToolDecl:
+        return ToolDecl(
+            "search-query",
+            "Performs a web search",
+            schema_for(Search.Params),
+            schema_for(Search.Returns),
+        )
+
+    def invoke(self, stack: Stack):
+        args = parse_val(stack.top().args, self.decl.params)
         raw_json = self._raw_results(args.query, args.max_results)
         cleaned = self._clean_results(raw_json)
-        return ToolResult(dict(Search.Returns(results=cleaned)))
+        stack.respond(serialize_val(Search.Returns(results=cleaned), self.decl.returns))
 
     def _raw_results(
         self,

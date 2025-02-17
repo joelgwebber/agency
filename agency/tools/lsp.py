@@ -1,25 +1,27 @@
 from agency.schema import prop, schema, schema_for
-from agency.tool import Tool, ToolCall, ToolDecl, ToolResult
+from agency.tool import Stack, Tool, ToolDecl
 
 
 class LSPTest(Tool):
-    @schema()
+    @schema
     class Params:
         question: str = prop("")
 
-    @schema()
+    @schema
     class Returns:
         answer: str = prop("")
 
-    decl = ToolDecl(
-        "lsp-test",
-        "",
-        schema_for(Params),
-        schema_for(Returns),
-    )
+    @property
+    def decl(self) -> ToolDecl:
+        return ToolDecl(
+            "lsp-test",
+            "",
+            schema_for(LSPTest.Params),
+            schema_for(LSPTest.Returns),
+        )
 
-    def invoke(self, req: ToolCall) -> ToolResult:
-        return ToolResult({})
+    def invoke(self, stack: Stack):
+        stack.respond({})
 
 
 # from multilspy import SyncLanguageServer

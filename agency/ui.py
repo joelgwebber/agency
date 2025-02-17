@@ -1,38 +1,37 @@
-# Seemingly unused, but imported for the side-effect of using readline()
-# for input on Unix-like systems.
 import readline
 
 from rich.console import Console
 
-from agency.agency import Agency
+from agency.agent import Agent
 
-readline.redisplay
+# The readline import is seemingly unused, but imported for the side-effect of using readline() for input on Unix-like systems.
+_ = readline
 
 
-class AgencyUI:
-    _agency: Agency
-    _tool_id: str
+class AgentUI:
+    _agent: Agent
 
-    def __init__(self, agency: Agency, tool_id: str):
-        self._agency = agency
-        self._tool_id = tool_id
+    def __init__(self, agency: Agent):
+        self._agent = agency
 
     def run(self):
         console = Console()
 
+        # TODO: ^C to interrupt generation.
+        stack = self._agent.start()
         while True:
             try:
                 user_input = input("> ").strip()
                 match user_input.lower():
                     case "done" | "quit" | "exit":
+                        # Done/quit/exit/^D will quit.
                         break
                     case "":
+                        # Ignore empty inputs.
                         continue
                     case _:
-                        response = self._agency.ask(
-                            self._tool_id, {"question": user_input}
-                        )
-                        # md = Markdown(response + "\n")
+                        # Ask a question.
+                        response = self._agent.ask(stack, user_input)
                         console.print(response)
-            except (EOFError, KeyboardInterrupt):
+            except EOFError:
                 break

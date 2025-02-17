@@ -5,38 +5,48 @@ from typing import List
 
 import chromadb
 
-from agency import Agency
+from agency import Agent
 from agency.keys import TAVILY_API_KEY
 from agency.minion import Minion
 from agency.models.openrouter import OpenRouter
 from agency.schema import schema, schema_for
 from agency.tool import ToolDecl
+from agency.toolbox import Toolbox
 from agency.tools.browse import Browse
 from agency.tools.docstore import Docstore
 from agency.tools.feedback import GetFeedback, LogStore, SubmitFeedback
 from agency.tools.files import EditFile, ReadFile
 from agency.tools.notebook import LookupNotes, RecordNote, RemoveNote, UpdateNote
 from agency.tools.search import Search
-from agency.ui import AgencyUI
+from agency.ui import AgentUI
 
-tool_name = "research"
-dbclient = chromadb.PersistentClient(os.path.join(tool_name, "chroma"))
-feedback = LogStore(dbclient, tool_name, "feedback")
-notebook = Docstore(dbclient, tool_name, "notebook")
+# Shared resources
+agent_name = "research"
+dbclient = chromadb.PersistentClient(os.path.join(agent_name, "chroma"))
+feedback = LogStore(dbclient, agent_name, "feedback")
+notebook = Docstore(dbclient, agent_name, "notebook")
 sonnet = OpenRouter("anthropic/claude-3.5-sonnet")
 
+# Tools
+search = Search(TAVILY_API_KEY)
+browse = Browse()
+record_note = RecordNote(notebook)
+update_note = UpdateNote(notebook)
+remove_note = RemoveNote(notebook)
+lookup_notes = LookupNotes(notebook)
+read_file = ReadFile("research/src")
+edit_file = EditFile("research/src")
+submit_feedback = SubmitFeedback(feedback)
+get_feedback = GetFeedback(feedback)
 
-@schema()
-class ResearchParams:
+
+# General knowledge minion
+@schema
+class KnowledgeParams:
     question: str
 
 
-@schema()
-class ResearchResults:
-    answer: str
-
-
-@schema()
+@schema
 class KnowledgeResults:
     answer: str
     search_terms: List[str]
@@ -46,14 +56,24 @@ GeneralKnowledge = Minion(
     ToolDecl(
         "general-knowledge",
         "Answers questions about general knowledge, useful as a starting point for further research",
-        schema_for(ResearchParams),
+        schema_for(KnowledgeParams),
         schema_for(KnowledgeResults),
     ),
     sonnet,
     """Answer the following question in general terms, with the goal of creating starting points for further research:
     {{ question }}""",
-    [],
 )
+
+
+# Research minion
+@schema
+class ResearchParams:
+    question: str
+
+
+@schema
+class ResearchResults:
+    answer: str
 
 
 ResearchAssistant = Minion(
@@ -70,38 +90,64 @@ ResearchAssistant = Minion(
     - DO NOT use any other information to answer questions
     - Always cite your sources
     Current question: {{ question }}""",
-    [
-        GeneralKnowledge.decl,
-        Search.decl,
-        Browse.decl,
-        # RecordNote.decl,
-        # UpdateNote.decl,
-        # RemoveNote.decl,
-        # LookupNotes.decl,
-        ReadFile.decl,
-        EditFile.decl,
-    ],
+    search.decl,
+    browse.decl,
+    record_note.decl,
+    update_note.decl,
+    remove_note.decl,
+    lookup_notes.decl,
+)
+
+
+# Code minion
+@schema
+class CodeParams:
+    question: str
+
+
+@schema
+class CodeResults:
+    answer: str
+
+
+CodeAssistant = Minion(
+    ToolDecl(
+        "code-assistant",
+        "Operates on source files in a local repository",
+        schema_for(CodeParams),
+        schema_for(CodeResults),
+    ),
+    sonnet,
+    """ """,
+)
+
+
+# Run the agent
+toolbox = Toolbox(
+    GeneralKnowledge,
+    ResearchAssistant,
+    search,
+    browse,
+    record_note,
+    update_note,
+    remove_note,
+    lookup_notes,
+    read_file,
+    edit_file,
+    submit_feedback,
+    get_feedback,
 )
 
 
 def run():
-    agency = Agency(
-        [
-            ResearchAssistant,
-            GeneralKnowledge,
-            Browse(),
-            Search(TAVILY_API_KEY),
-            RecordNote(notebook),
-            UpdateNote(notebook),
-            RemoveNote(notebook),
-            LookupNotes(notebook),
-            ReadFile("research/src"),
-            EditFile("research/src"),
-            SubmitFeedback(feedback),
-            GetFeedback(feedback),
-        ]
+    agent = Agent(
+        """You are a general assistant, that can use tools to answer the user's questions.""",
+        sonnet,
+        toolbox,
+        GeneralKnowledge.decl,
+        ResearchAssistant.decl,
     )
-    AgencyUI(agency, ResearchAssistant.decl.id).run()
+    AgentUI(agent).run()
 
 
 run()

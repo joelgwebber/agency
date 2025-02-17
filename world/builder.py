@@ -2,13 +2,13 @@ import os
 
 import chromadb
 
-from agency import Agency
+from agency import Agent
 from agency.minion import MinionDecl
 from agency.schema import schema, schema_for
 from agency.tools.docstore import Docstore
 from agency.tools.logstore import LogStore
 from agency.tools.notebook import LookupNotes, RecordNote, RemoveNote, UpdateNote
-from agency.ui import AgencyUI
+from agency.ui import AgentUI
 
 tool_name = "world"
 dbclient = chromadb.PersistentClient(os.path.join(tool_name, "chroma"))
@@ -16,7 +16,7 @@ knowledge = Docstore(dbclient, tool_name, "knowledge")
 feedback = LogStore(dbclient, tool_name, "feedback")
 
 
-@schema()
+@schema
 class WorldBuilderArgs:
     question: str
 
@@ -47,5 +47,5 @@ tools = [
     LookupNotes(knowledge),
 ]
 
-agency = Agency(tools)
-AgencyUI(agency, WorldBuilder.id).run()
+agency = Agent(tools)
+AgentUI(agency, WorldBuilder.id).run()

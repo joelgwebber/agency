@@ -11,7 +11,7 @@ from agency.utils import timestamp
 SCHEMA_KEY = "_schema"
 
 
-def schema(cls_desc: str = ""):
+def schema(cls=None, cls_desc: str = ""):
     """A class decorator that can be used on a dataclass, giving it an OpenAPI schema (accessible via schema_for(cls),
     and allowing it to be parsed with tools.parse_val(). This effectively extends @dataclass.
     """
@@ -26,7 +26,7 @@ def schema(cls_desc: str = ""):
         _ensure_schema(cls, cls_desc)
         return cls
 
-    return decorator
+    return decorator(cls)
 
 
 # TODO: Properly typing the return type causes all kinds of problems at call sites. Figure out why.
@@ -41,7 +41,7 @@ def prop(
 
     if default_factory:
         return field(default_factory=default_factory, metadata={"desc": desc})
-    elif default:
+    elif default is not None:
         return field(default=default, metadata={"desc": desc})
     return field(metadata={"desc": desc})
 
@@ -252,11 +252,47 @@ class Schema:
         return d
 
 
-# `schema` is only optional to avoid making every call-site messy.
-def parse_val(val: Any, schema: Optional[Schema]) -> Any:
+def serialize_val(val: Any, schema: Optional[Schema]) -> Any:
     if schema is None:
-        raise Exception(f"Need a value type to parse {val}")
+        raise Exception(f"Need a schema to serialize {val}")
 
+    match schema.typ:
+        # Simple types.
+        case Type.String:
+            return str(val)
+        case Type.Real:
+            return float(val)
+        case Type.Integer:
+            return int(val)
+        case Type.Boolean:
+            return bool(val)
+        case Type.DateTime:
+            return timestamp.isoformat(val)
+
+        # Arrays.
+        case Type.Array:
+            print(">>>", val)
+            print(">>>", schema.item_schema)
+            return [serialize_val(item, schema.item_schema) for item in val]
+
+        # Objects.
+        case Type.Object:
+            if schema.item_schema is not None:
+                # TODO: Validate item type.
+                return dict(val.items())
+            if schema.prop_schemae is None or schema.cls is None:
+                raise Exception(
+                    f"Need property schemae to serialize object {val} : {schema}"
+                )
+
+            # Serialize dataclass fields.
+            serialized_obj = {}
+            for name, prop_schema in schema.prop_schemae.items():
+                serialized_obj[name] = serialize_val(getattr(val, name), prop_schema)
+            return serialized_obj
+
+
+def parse_val(val: Any, schema: Schema) -> Any:
     match schema.typ:
         # Simple types.
         case Type.String:
@@ -272,6 +308,8 @@ def parse_val(val: Any, schema: Optional[Schema]) -> Any:
 
         # Arrays.
         case Type.Array:
+            if not schema.item_schema:
+                raise Exception(f"missing item_schema for {schema}")
             return [parse_val(item, schema.item_schema) for item in val]
 
         # Objects.

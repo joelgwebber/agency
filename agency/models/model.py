@@ -49,7 +49,7 @@ class Model:
     def complete(
         self,
         messages: List[Message],
-        response: Optional[OpenAPISchema],
+        response: Optional[OpenAPISchema] = None,
         functions: Optional[List[Function]] = None,
     ) -> Message:
         """Get a completion from the language model.
