@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -47,7 +47,7 @@ class Search(Tool):
         args = parse_val(stack.top().args, self.decl.params)
         raw_json = self._raw_results(args.query, args.max_results)
         cleaned = self._clean_results(raw_json)
-        stack.respond(serialize_val(Search.Returns(results=cleaned), self.decl.returns))
+        stack.respond(serialize_val(cleaned, self.decl.returns))
 
     def _raw_results(
         self,
@@ -94,7 +94,7 @@ class Search(Tool):
     #   }]
     #   response_time: number
     # }
-    def _clean_results(self, results: Dict) -> Search.Returns:
+    def _clean_results(self, results: Dict[str, Any]) -> Search.Returns:
         """Clean results from Tavily Search API."""
         if "results" in results:
             clean_results: List[SearchResult] = []
@@ -102,7 +102,7 @@ class Search(Tool):
                 clean_results.append(
                     SearchResult(url=result["url"], content=result["content"])
                 )
-            return Search.Returns(results=clean_results, error="")
+            return Search.Returns(results=clean_results)
 
         # Error details.
         elif "details" in results:

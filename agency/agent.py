@@ -52,31 +52,11 @@ class Agent:
         - If response.call_id is set: push that tool onto stack and continue
         """
         while stack.depth() > 1:
-            frame = stack.top()
-
-            # debug
-            args = frame.result_args if frame.result_args else frame.args
-            print(
-                f"--> invoking {frame.tool_id} <- {frame.result_tool_id}({frame.result_call_id})\n{trunc(str(args), 120)}"
-            )
-
             # TODO: Catch any exception and return it to the caller as a
             # structured error response, focusing on LLM self-repair.
+            frame = stack.top()
+            print("--> invoking", frame.tool_id)
             tool = self._toolbox.tool_by_id(frame.tool_id)
             if not tool:
                 raise Exception("expected frame.tool to be defined")
             tool.invoke(stack)
-
-
-# result: Optional[ToolResult] = None
-# if result.call_tool_id:
-#     # It wants to call another tool; push it on the stack.
-#     tool = self._toolbox.tool_by_id(result.call_tool_id)
-#     stack.invoke(tool, result.args, result.call_id or "")
-# else:
-#     # The Tool is done; pop it off the stack and pass the response to the underlying frame.
-#     last_frame = stack.pop()
-#     if stack.depth() > 0:
-#         stack.top().respond(
-#             last_frame.tool_id, last_frame.call_id, result.args
-#         )

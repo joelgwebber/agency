@@ -6,7 +6,7 @@ The notes are stored in a vector database with computed embeddings for later ret
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, cast
+from typing import Dict, List
 
 from agency.schema import (
     Schema,
@@ -28,7 +28,8 @@ class RecordNote(Tool):
         id: str = prop("unique note id")
         text: str = prop("note text")
         labels: Dict[str, str] = prop(
-            "labels and values to associate with this note", default_factory=lambda: {}
+            "labeled string values to associate with this note",
+            default_factory=lambda: {},
         )
 
     store: Docstore

@@ -214,8 +214,6 @@ class Schema:
     # Object dataclass to instantiate.
     cls: Optional[type] = None
 
-    # TODO: This is very Gemini-specific at the moment.
-    # Should be easy to generalize to other function-calling model APIs.
     def to_openapi(self) -> OpenAPISchema:
         """Produces a dictionary in the structure expected by the Gemini / OpenAPI schema."""
 
@@ -271,8 +269,6 @@ def serialize_val(val: Any, schema: Optional[Schema]) -> Any:
 
         # Arrays.
         case Type.Array:
-            print(">>>", val)
-            print(">>>", schema.item_schema)
             return [serialize_val(item, schema.item_schema) for item in val]
 
         # Objects.
@@ -288,7 +284,8 @@ def serialize_val(val: Any, schema: Optional[Schema]) -> Any:
             # Serialize dataclass fields.
             serialized_obj = {}
             for name, prop_schema in schema.prop_schemae.items():
-                serialized_obj[name] = serialize_val(getattr(val, name), prop_schema)
+                item = getattr(val, name)
+                serialized_obj[name] = serialize_val(item, prop_schema)
             return serialized_obj
 
 

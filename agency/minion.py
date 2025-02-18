@@ -89,7 +89,6 @@ class Minion(Tool):
 
         except Exception as e:
             # Catch exceptions, log them, and send them to the model in hopes it will sort itself.
-            print(">>>", frame.history)
             msg = f"""exception calling {self.decl.id}: {e}
                      {"\n".join(traceback.format_exception(e))}"""
             stack.error(msg)

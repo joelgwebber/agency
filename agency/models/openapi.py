@@ -10,6 +10,6 @@ class OpenAPISchema(TypedDict):
     format: NotRequired[str]
     description: NotRequired[str]
     enum: NotRequired[list[Any]]
-    properties: NotRequired[Dict[str, "OpenAPISchema"]]
+    properties: NotRequired[Dict[str, OpenAPISchema]]
     required: NotRequired[List[str]]
-    items: NotRequired["OpenAPISchema"]
+    items: NotRequired[OpenAPISchema]
