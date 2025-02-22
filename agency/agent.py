@@ -5,7 +5,6 @@ from typing import List
 from agency.models.model import Function, Message, Model, Role
 from agency.tool import Frame, Stack, ToolDecl
 from agency.toolbox import Toolbox
-from agency.utils import trunc
 
 
 class Agent:
@@ -23,7 +22,7 @@ class Agent:
         self._toolbox = toolbox
 
     def start(self) -> Stack:
-        stack = Stack(frames=[Frame("", {}, "", [self._sys_prompt])])
+        stack = Stack(frames=[Frame("agent", history=[self._sys_prompt])])
         return stack
 
     def ask(self, stack: Stack, question: str) -> str:
@@ -60,3 +59,4 @@ class Agent:
             if not tool:
                 raise Exception("expected frame.tool to be defined")
             tool.invoke(stack)
+            print("<--", frame.result_args)

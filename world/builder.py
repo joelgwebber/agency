@@ -3,7 +3,7 @@ import os
 import chromadb
 
 from agency import Agent
-from agency.minion import MinionDecl
+from agency.minion import Minion
 from agency.schema import schema, schema_for
 from agency.tools.docstore import Docstore
 from agency.tools.logstore import LogStore
@@ -21,7 +21,7 @@ class WorldBuilderArgs:
     question: str
 
 
-WorldBuilder = MinionDecl(
+WorldBuilder = Minion(
     "world-builder",
     """A world-building assistant.""",
     schema_for(WorldBuilderArgs),

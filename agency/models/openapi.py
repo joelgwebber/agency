@@ -7,7 +7,6 @@ class OpenAPISchema(TypedDict):
     """OpenAPI schema type used to describe function parameters."""
 
     type: str
-    format: NotRequired[str]
     description: NotRequired[str]
     enum: NotRequired[list[Any]]
     properties: NotRequired[Dict[str, OpenAPISchema]]

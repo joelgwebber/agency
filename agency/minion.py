@@ -1,6 +1,5 @@
 import json
 import traceback
-from dataclasses import dataclass
 from typing import List
 
 from jinja2 import Environment
@@ -10,23 +9,12 @@ from agency.models import Function, FunctionCall, Message, Model, Role
 from agency.tool import Stack, Tool, ToolDecl
 
 
-@dataclass
-class MinionDecl(ToolDecl):
-    """Extension of a tool declaration to be used with minions, giving them a jinja template and list of available
-    tools they can use."""
-
-    template: str
-    tools: List[ToolDecl]
-
-
 class Minion(Tool):
-    _decl: ToolDecl
     _model: Model
     _template: Template
     _funcs: List[Function]
 
-    def __init__(self, decl: ToolDecl, model: Model, template: str, *tools: ToolDecl):
-        self._decl = decl
+    def __init__(self, model: Model, template: str, *tools: ToolDecl):
         self._model = model
         self._template = Environment().from_string(template)
         self._funcs = [decl.to_func() for decl in tools]
@@ -38,10 +26,6 @@ class Minion(Tool):
                 "Always invoke functions or return a structured JSON result. Never return raw text.",
             )
         ]
-
-    @property
-    def decl(self) -> ToolDecl:
-        return self._decl
 
     def invoke(self, stack: Stack):
         frame = stack.top()
